@@ -8,15 +8,14 @@ add_executable(temp test/temp.cpp
     src/common/fd_guard_t.h
     src/common/fd_guard_t.cpp
     
-    src/net_device/net_device.h
-    src/net_device/net_device.cpp
-    src/net_device/tun.cpp
+    src/net_device/net_devices_t.h
+    src/net_device/net_devices_t.cpp
 )
 
-# add_executable(send test/raw_sender.cpp
-#     src/common/fd_guard_t.h
-#     src/common/fd_guard_t.cpp)
-# 
-# add_executable(receive test/raw_receiver.cpp
-#     src/common/fd_guard_t.h
-#     src/common/fd_guard_t.cpp)
+add_executable(send test/raw_sender.cpp
+    src/common/fd_guard_t.h
+    src/common/fd_guard_t.cpp)
+
+add_executable(receive test/raw_receiver.cpp
+    src/common/fd_guard_t.h
+    src/common/fd_guard_t.cpp)

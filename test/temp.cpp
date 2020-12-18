@@ -1,18 +1,10 @@
-#include "net_device/net_device.h"
+#include "net_device/net_devices_t.h"
 
 #include <iostream>
 
 int main()
 {
-    using namespace autolabor::connection_aggregation;
-
-    auto netlink = bind_netlink(RTMGRP_LINK);
-    char name[16]{};
-    unsigned index;
-    auto tun = register_tun(netlink, name, &index);
-    std::cout << name << '(' << index << ')' << std::endl;
-    auto list = list_devices(netlink);
-    std::cout << list;
+    autolabor::connection_aggregation::net_devices_t network;
 
     while (true)
         ;

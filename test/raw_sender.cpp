@@ -22,7 +22,7 @@ int main()
     setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, link, std::strlen(link)); // 绑定套接字到网卡
 
     in_addr address_local, address_remote;
-    inet_pton(AF_INET, "192.168.18.176", &address_local);
+    inet_pton(AF_INET, "192.168.18.178", &address_local);
     inet_pton(AF_INET, "192.168.18.177", &address_remote);
     sockaddr_in
         local{
