@@ -4,18 +4,17 @@ set(CMAKE_CXX_STANDARD 20)
 
 include_directories(src)
 
-add_executable(send test/raw_sender.cpp
-    src/common/fd_guard_t.h
-    src/common/fd_guard_t.cpp
+add_library(kernel 
+    src/fd_guard_t.h
+    src/fd_guard_t.cpp
     
-    src/net_device/net_devices_t.h
-    src/net_device/net_devices_t.cpp
+    src/net_devices_t.h
+    src/net_devices_t_constructor.cpp
+    src/net_devices_t_others.cpp
 )
 
-add_executable(receive test/raw_receiver.cpp
-    src/common/fd_guard_t.h
-    src/common/fd_guard_t.cpp
-    
-    src/net_device/net_devices_t.h
-    src/net_device/net_devices_t.cpp
-)
+add_executable(send test/raw_sender.cpp)
+target_link_libraries(send kernel)
+
+add_executable(receive test/raw_receiver.cpp)
+target_link_libraries(receive kernel)

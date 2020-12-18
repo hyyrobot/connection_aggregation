@@ -1,4 +1,4 @@
-#include "../common/fd_guard_t.h"
+#include "fd_guard_t.h"
 
 #include <netinet/in.h>
 #include <linux/if.h>
@@ -20,7 +20,7 @@ namespace autolabor::connection_aggregation
         net_devices_t();
 
         size_t receive(msghdr *) const;
-        size_t send(unsigned index, msghdr *) const;
+        std::unordered_map<unsigned, size_t> send(msghdr *) const;
 
         std::string operator[](unsigned) const;
 

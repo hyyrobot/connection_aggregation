@@ -1,7 +1,7 @@
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 
-#include "net_device/net_devices_t.h"
+#include "net_devices_t.h"
 #include <iostream>
 #include <chrono>
 #include <thread>
@@ -13,7 +13,7 @@ int main()
 
     net_devices_t devices;
     in_addr address_remote;
-    inet_pton(AF_INET, "192.168.18.179", &address_remote);
+    inet_pton(AF_INET, "192.168.18.182", &address_remote);
     sockaddr_in remote{
         .sin_family = AF_INET,
         .sin_port = 0,
@@ -52,7 +52,10 @@ int main()
 
     while (true)
     {
-        std::cout << ++extra.id << ": " << devices.send(2, &msg) << std::endl;
+        auto result = devices.send(&msg);
+        std::cout << ++extra.id << ": " << std::endl;
+        for (auto pair : result)
+            std::cout << '<' << devices[pair.first] << ": " << pair.second << '>' << std::endl;
 
         using namespace std::chrono_literals;
         std::this_thread::sleep_for(.5s);

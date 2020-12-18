@@ -1,10 +1,7 @@
-#include <linux/if.h>
-#include <linux/if_ether.h>
 #include <linux/if_packet.h>
 #include <netinet/ip.h>
-#include <unistd.h>
 
-#include "net_device/net_devices_t.h"
+#include "net_devices_t.h"
 #include <iostream>
 #include <cstring>
 #include <sstream>
@@ -60,15 +57,14 @@ int main()
     }
 }
 
-std::string ip_address_text(in_addr ip)
+std::ostream &operator<<(std::ostream &stream, const in_addr ip)
 {
-    std::stringstream builder;
-    uint8_t *temp = reinterpret_cast<uint8_t *>(&ip);
-    builder << +temp[0] << '.'
+    auto temp = reinterpret_cast<const uint8_t *>(&ip);
+    stream << +temp[0] << '.'
             << +temp[1] << '.'
             << +temp[2] << '.'
             << +temp[3];
-    return builder.str();
+    return stream;
 }
 
 std::ostream &operator<<(std::ostream &stream, const ip *ip_pack)
@@ -87,7 +83,7 @@ std::ostream &operator<<(std::ostream &stream, const ip *ip_pack)
            << "protocol:        " << +ip_pack->ip_p << std::endl
            << "check sum:       " << ip_pack->ip_sum << std::endl
            << "-----------------" << std::endl
-           << "source:          " << ip_address_text(ip_pack->ip_src) << std::endl
-           << "destination:     " << ip_address_text(ip_pack->ip_dst);
+           << "source:          " << ip_pack->ip_src << std::endl
+           << "destination:     " << ip_pack->ip_dst;
     return stream;
 }
