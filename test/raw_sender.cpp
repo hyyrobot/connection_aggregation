@@ -12,7 +12,7 @@ int main()
     using namespace autolabor::connection_aggregation;
 
     net_devices_t devices;
-    in_addr address_local, address_remote;
+    in_addr address_remote;
     inet_pton(AF_INET, "192.168.18.179", &address_remote);
     sockaddr_in remote{
         .sin_family = AF_INET,
@@ -28,8 +28,6 @@ int main()
         .ip_off = 0,
         .ip_ttl = 64,
         .ip_p = 3,
-        .ip_sum = 0,
-        .ip_src = address_local,
         .ip_dst = address_remote,
     };
     struct
