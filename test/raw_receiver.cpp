@@ -4,7 +4,7 @@
 #include <netinet/ip.h>
 #include <unistd.h>
 
-#include "common/fd_guard_t.h"
+#include "net_device/net_devices_t.h"
 #include <iostream>
 #include <cstring>
 #include <sstream>
@@ -15,7 +15,7 @@ int main()
 {
     using namespace autolabor::connection_aggregation;
 
-    const fd_guard_t fd(socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_IP)));
+    const net_devices_t devices;
 
     ip header{};
     struct
@@ -38,7 +38,7 @@ int main()
     };
     while (1)
     {
-        auto size = recvmsg(fd, &msg, 0);
+        auto size = recvmsg(devices.receiver(), &msg, 0);
         switch (header.ip_p)
         {
         case 0:  // ipv6 hbh
