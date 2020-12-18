@@ -14,10 +14,10 @@ std::ostream &operator<<(std::ostream &, const ip *);
 int main()
 {
     using namespace autolabor::connection_aggregation;
-    
+
     const fd_guard_t fd(socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_IP)));
 
-    ip header;
+    ip header{};
     struct
     {
         char host[14];
@@ -39,11 +39,24 @@ int main()
     while (1)
     {
         auto size = recvmsg(fd, &msg, 0);
-        if (header.ip_p != 64)
-            continue;
-        std::cout << &header << std::endl
-                  << extra.host << '[' << extra.id << "]: "
-                  << buffer << std::endl;
+        switch (header.ip_p)
+        {
+        case 0:  // ipv6 hbh
+        case 1:  // icmp
+        case 2:  // igmp
+        case 4:  // ip in ip
+        case 6:  // tcp
+        case 17: // udp
+            break;
+
+        default:
+        {
+            std::cout << &header << std::endl
+                      << extra.host << '[' << extra.id << "]: "
+                      << buffer << std::endl;
+            break;
+        }
+        }
     }
 }
 
@@ -66,7 +79,7 @@ std::ostream &operator<<(std::ostream &stream, const ip *ip_pack)
            << "verson:          " << ip_pack->ip_v << std::endl
            << "len_head:        " << ip_pack->ip_hl << std::endl
            << "service type:    " << +ip_pack->ip_tos << std::endl
-           << "len_pack:        " << ip_pack->ip_len << std::endl
+           << "len_pack:        " << ntohs(ip_pack->ip_len) << std::endl
            << "-----------------" << std::endl
            << "pack_id:         " << (ip_pack->ip_id & 0x1fu) << std::endl
            << "fragment offset: " << ip_pack->ip_off << std::endl
