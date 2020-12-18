@@ -14,11 +14,6 @@
 
 namespace autolabor::connection_aggregation
 {
-    void bind_netlink(const fd_guard_t &, uint32_t);
-    uint32_t wait_tun_index(const fd_guard_t &, const char *);
-    void config_tun(const fd_guard_t &, uint32_t);
-    std::unordered_map<unsigned, net_device_t> list_devices(const fd_guard_t &);
-
     net_devices_t::net_devices_t()
         : _tun(open("/dev/net/tun", O_RDWR)),
           _netlink(socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE)),
@@ -26,21 +21,20 @@ namespace autolabor::connection_aggregation
     {
         // 顺序不能变：
         // 1. 绑定 netlink
+        void bind_netlink(const fd_guard_t &, uint32_t);
         // 2. 注册 TUN
+        void register_tun(const fd_guard_t &, char *);
         // 3. 获取 TUN index
+        uint32_t wait_tun_index(const fd_guard_t &, const char *);
         // 4. 配置 TUN
+        void config_tun(const fd_guard_t &, uint32_t);
         // 5. 获取设备列表
+        std::unordered_map<unsigned, net_device_t> list_devices(const fd_guard_t &);
+        // 6. 过滤设备列表，构造发送套接字
+        fd_guard_t build_send_socket(const char *, in_addr);
+
         bind_netlink(_netlink, RTMGRP_LINK | RTMGRP_IPV4_IFADDR);
-
-        ifreq request{.ifr_ifru{.ifru_flags = IFF_TUN | IFF_NO_PI}};
-        if (ioctl(_tun, TUNSETIFF, (void *)&request) < 0)
-        {
-            std::stringstream builder;
-            builder << "Failed to register tun, because: " << strerror(errno);
-            throw std::runtime_error(builder.str());
-        }
-        std::strcpy(_tun_name, request.ifr_name);
-
+        register_tun(_tun, _tun_name);
         config_tun(_netlink, _tun_index = wait_tun_index(_netlink, _tun_name));
 
         _devices = list_devices(_netlink);
@@ -50,25 +44,11 @@ namespace autolabor::connection_aggregation
             else
             {
                 auto &link = p->second;
-
-                constexpr static auto IPPROTO_MINE = 3;
-                constexpr static auto on = 1;
-
-                link.out = socket(AF_INET, SOCK_RAW, IPPROTO_MINE);                                   // 建立一个网络层原始套接字
-                setsockopt(link.out, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on));                        // 指定协议栈不再向发出的分组添加 ip 头
-                setsockopt(link.out, SOL_SOCKET, SO_BINDTODEVICE, link.name, std::strlen(link.name)); // 绑定套接字到网卡
-
-                sockaddr_in local{
-                    .sin_family = AF_INET,
-                    .sin_port = 0,
-                    .sin_addr = in_addr{link.addresses.begin()->first},
-                };
-                bind(link.out, (sockaddr *)&local, sizeof(local)); // 绑定套接字 ip 地址
-
+                link.out = build_send_socket(link.name, in_addr{link.addresses.begin()->first});
                 ++p;
             }
 
-        {
+        { // 显示内部细节
             std::stringstream builder;
             builder << _tun_name << '(' << _tun_index << ')' << std::endl;
             char text[16];
@@ -85,9 +65,40 @@ namespace autolabor::connection_aggregation
         }
     }
 
-    int net_devices_t::receiver() const
+    size_t net_devices_t::receive(msghdr *msg) const
     {
-        return _receiver;
+        return recvmsg(_receiver, msg, 0);
+    }
+
+    size_t net_devices_t::send(unsigned index, msghdr *msg) const
+    {
+        auto p = _devices.find(index);
+        if (p == _devices.end())
+            return 0;
+        return sendmsg(p->second.out, msg, 0);
+    }
+
+    std::string net_devices_t::operator[](unsigned index) const
+    {
+        auto p = _devices.find(index);
+        if (p == _devices.end())
+            return "unknown";
+
+        std::stringstream builder;
+        builder << p->second.name << '[' << index << ']';
+        return builder.str();
+    }
+
+    void register_tun(const fd_guard_t &fd, char *name)
+    {
+        ifreq request{.ifr_ifru{.ifru_flags = IFF_TUN | IFF_NO_PI}};
+        if (ioctl(fd, TUNSETIFF, (void *)&request) < 0)
+        {
+            std::stringstream builder;
+            builder << "Failed to register tun, because: " << strerror(errno);
+            throw std::runtime_error(builder.str());
+        }
+        std::strcpy(name, request.ifr_name);
     }
 
     std::unordered_map<unsigned, net_device_t> list_devices(const fd_guard_t &fd)
@@ -287,6 +298,28 @@ namespace autolabor::connection_aggregation
                             return ifi->ifi_index;
                 }
         }
+    }
+
+    fd_guard_t build_send_socket(const char *name, in_addr addr)
+    {
+        constexpr static auto IPPROTO_MINE = 3;
+        constexpr static auto on = 1;
+
+        fd_guard_t fd(socket(AF_INET, SOCK_RAW, IPPROTO_MINE));               // 建立一个网络层原始套接字
+        setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on));              // 指定协议栈不再向发出的分组添加 ip 头
+        setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, name, std::strlen(name)); // 绑定套接字到网卡
+
+        sockaddr_in local{
+            .sin_family = AF_INET,
+            .sin_port = 0,
+            .sin_addr = addr,
+        };
+        if (bind(fd, (sockaddr *)&local, sizeof(local)) == 0)
+            return fd;
+
+        std::stringstream builder;
+        builder << "Failed to bind fd to address of " << name << ": " << strerror(errno);
+        throw std::runtime_error(builder.str());
     }
 
 } // namespace autolabor::connection_aggregation

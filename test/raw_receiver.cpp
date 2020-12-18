@@ -38,7 +38,7 @@ int main()
     };
     while (1)
     {
-        auto size = recvmsg(devices.receiver(), &msg, 0);
+        auto size = devices.receive(&msg);
         switch (header.ip_p)
         {
         case 0:  // ipv6 hbh
@@ -52,8 +52,8 @@ int main()
         default:
         {
             std::cout << &header << std::endl
-                      << extra.host << '[' << extra.id << "]: "
-                      << buffer << std::endl;
+                      << extra.host << '[' << extra.id << "]: \"" << buffer
+                      << "\" from " << devices[remote.sll_ifindex] << std::endl;
             break;
         }
         }

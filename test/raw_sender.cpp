@@ -1,9 +1,7 @@
-#include <netinet/in.h>
-#include <netpacket/packet.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 
-#include "common/fd_guard_t.h"
+#include "net_device/net_devices_t.h"
 #include <iostream>
 #include <chrono>
 #include <thread>
@@ -13,29 +11,14 @@ int main()
 {
     using namespace autolabor::connection_aggregation;
 
-    constexpr static auto on = 1;
-    constexpr static uint8_t IPPROTO_MINE = 3;
-    constexpr static auto link = "ens33";
-
-    const fd_guard_t fd(socket(AF_INET, SOCK_RAW, IPPROTO_MINE));         // 建立一个网络层原始套接字
-    setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on));              // 指定协议栈不再向发出的分组添加 ip 头
-    setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, link, std::strlen(link)); // 绑定套接字到网卡
-
+    net_devices_t devices;
     in_addr address_local, address_remote;
-    inet_pton(AF_INET, "192.168.18.178", &address_local);
     inet_pton(AF_INET, "192.168.18.179", &address_remote);
-    sockaddr_in
-        local{
-            .sin_family = AF_INET,
-            .sin_port = 0,
-            .sin_addr = address_local,
-        },
-        remote{
-            .sin_family = AF_INET,
-            .sin_port = 0,
-            .sin_addr = address_remote,
-        };
-    bind(fd, (sockaddr *)&local, sizeof(local)); // 绑定套接字 ip 地址
+    sockaddr_in remote{
+        .sin_family = AF_INET,
+        .sin_port = 0,
+        .sin_addr = address_remote,
+    };
 
     ip header{
         .ip_hl = 5 + 4,
@@ -44,7 +27,7 @@ int main()
         .ip_id = 4,
         .ip_off = 0,
         .ip_ttl = 64,
-        .ip_p = IPPROTO_MINE,
+        .ip_p = 3,
         .ip_sum = 0,
         .ip_src = address_local,
         .ip_dst = address_remote,
@@ -71,7 +54,7 @@ int main()
 
     while (true)
     {
-        std::cout << ++extra.id << ": " << sendmsg(fd, &msg, 0) << std::endl;
+        std::cout << ++extra.id << ": " << devices.send(2, &msg) << std::endl;
 
         using namespace std::chrono_literals;
         std::this_thread::sleep_for(.5s);

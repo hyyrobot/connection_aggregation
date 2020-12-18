@@ -19,7 +19,10 @@ namespace autolabor::connection_aggregation
     {
         net_devices_t();
 
-        int receiver() const;
+        size_t receive(msghdr *) const;
+        size_t send(unsigned index, msghdr *) const;
+
+        std::string operator[](unsigned) const;
 
     private:
         // tun 套接字
