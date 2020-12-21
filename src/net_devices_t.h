@@ -1,10 +1,13 @@
 #include "net_device_t.h"
 
+#include <netinet/ip.h>
 #include <unordered_set>
 #include <unordered_map>
 
 namespace autolabor::connection_aggregation
 {
+    constexpr static auto IPPROTO_MINE = 3;
+
     struct actual_msg_t
     {
         in_addr remote;
@@ -21,11 +24,8 @@ namespace autolabor::connection_aggregation
 
         in_addr tun_address() const;
 
-        std::pair<actual_msg_t, uint8_t>
-        receive_from(uint8_t *, size_t);
-
-        std::unordered_map<unsigned, size_t>
-            send_to(actual_msg_t) const;
+        size_t send(ip, uint8_t, const uint8_t *) const;
+        bool receive(ip *, uint8_t *, size_t);
 
         std::string operator[](unsigned) const;
 
@@ -46,6 +46,18 @@ namespace autolabor::connection_aggregation
         // 实体网卡
         std::unordered_map<unsigned, net_device_t>
             _devices;
+
+        // 用于发送的缓存
+
+        mutable sockaddr_in _remote;
+        mutable struct
+        {
+            in_addr src, dst;
+            char host[14];
+            uint8_t id, protocol;
+        } _extra;
+        mutable iovec _iov[3];
+        msghdr _msg;
 
         std::unordered_map<in_addr_t, std::string>
             _remotes1;

@@ -18,8 +18,21 @@ namespace autolabor::connection_aggregation
         : _tun(open("/dev/net/tun", O_RDWR)),
           _netlink(socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE)),
           _receiver(socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_IP))),
-          _tun_address(address)
+          _tun_address(address),
+          _remote{.sin_family = AF_INET},
+          _extra{},
+          _iov{
+              {.iov_base = nullptr, .iov_len = sizeof(ip) - 2 * sizeof(in_addr)},
+              {.iov_base = &_extra, .iov_len = sizeof(_extra)},
+          },
+          _msg{
+              .msg_name = &_remote,
+              .msg_namelen = sizeof(_remote),
+              .msg_iov = _iov,
+              .msg_iovlen = sizeof(_iov) / sizeof(iovec),
+          }
     {
+        std::strcpy(_extra.host, host);
         // 顺序不能变：
         // 1. 绑定 netlink
         void bind_netlink(const fd_guard_t &, uint32_t);
@@ -94,9 +107,8 @@ namespace autolabor::connection_aggregation
                         }
                     if (name && std::strcmp(name, _tun_name) != 0 && std::strcmp(name, "lo") != 0)
                     {
-                        auto [p, success] = _devices.try_emplace(ifa->ifa_index, host, name);
-                        if (success)
-                            p->second.push_address(address);
+                        auto [p, _] = _devices.try_emplace(ifa->ifa_index, name);
+                        p->second.push_address(address);
                     }
                 }
                 break;

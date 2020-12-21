@@ -10,6 +10,7 @@ std::ostream &operator<<(std::ostream &, const ip *);
 
 int main()
 {
+    std::cout << sizeof(ip) << std::endl;
     using namespace autolabor::connection_aggregation;
 
     in_addr address;
@@ -17,23 +18,13 @@ int main()
     net_devices_t devices("user", address);
 
     unsigned char buffer[32];
-    ip header{
-        .ip_hl = 5,
-        .ip_v = 4,
-        .ip_ttl = 64,
-        .ip_dst = devices.tun_address(),
-    };
+    ip header{};
     while (1)
     {
-        auto [msg, index] = devices.receive_from(buffer, sizeof(buffer));
-        if (index <= 0)
+        if (!devices.receive(&header, buffer, sizeof(buffer)))
             continue;
-        header.ip_len = 20 + msg.size;
-        header.ip_p = msg.protocol;
-        header.ip_src = msg.remote;
         std::cout << &header << std::endl
-                  << '[' << msg.id << "]: \"" << buffer
-                  << "\" from " << devices[index] << std::endl;
+                  << buffer << std::endl;
     }
 }
 

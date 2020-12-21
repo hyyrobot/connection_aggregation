@@ -12,6 +12,8 @@ add_library(kernel
     src/net_device_t.cpp
 
     src/net_devices_t.h
+    src/aggregation_send.cpp
+    src/aggregation_receive.cpp
     src/net_devices_t_constructor.cpp
     src/net_devices_t_others.cpp
 )
