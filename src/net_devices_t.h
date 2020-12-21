@@ -1,19 +1,31 @@
 #include "net_device_t.h"
 
-#include <netinet/in.h>
-#include <linux/if.h>
-
 #include <unordered_set>
 #include <unordered_map>
 
 namespace autolabor::connection_aggregation
 {
+    struct actual_msg_t
+    {
+        in_addr remote;
+        uint8_t protocol;
+        unsigned id;
+
+        uint8_t *buffer;
+        size_t size;
+    };
+
     struct net_devices_t
     {
-        net_devices_t(const char *);
+        net_devices_t(const char *, in_addr);
 
-        size_t receive(msghdr *) const;
-        std::unordered_map<unsigned, size_t> send_to(const uint8_t *, size_t, in_addr, unsigned) const;
+        in_addr tun_address() const;
+
+        std::pair<actual_msg_t, uint8_t>
+        receive_from(uint8_t *, size_t);
+
+        std::unordered_map<unsigned, size_t>
+            send_to(actual_msg_t) const;
 
         std::string operator[](unsigned) const;
 
@@ -23,7 +35,7 @@ namespace autolabor::connection_aggregation
         fd_guard_t _tun;
         char _tun_name[IFNAMSIZ];
         unsigned _tun_index;
-        in_addr_t _tun_address;
+        in_addr _tun_address;
 
         // netlink 套接字
         fd_guard_t _netlink;

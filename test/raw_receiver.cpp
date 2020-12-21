@@ -1,5 +1,5 @@
-#include <linux/if_packet.h>
 #include <netinet/ip.h>
+#include <arpa/inet.h>
 
 #include "net_devices_t.h"
 #include <iostream>
@@ -12,48 +12,28 @@ int main()
 {
     using namespace autolabor::connection_aggregation;
 
-    const net_devices_t devices("user");
+    in_addr address;
+    inet_pton(AF_INET, "100.100.100.100", &address);
+    net_devices_t devices("user", address);
 
-    ip header{};
-    struct
-    {
-        char host[14];
-        uint16_t id;
-    } extra;
     unsigned char buffer[32];
-    iovec iov[]{
-        {.iov_base = &header, .iov_len = sizeof(header)},
-        {.iov_base = &extra, .iov_len = sizeof(extra)},
-        {.iov_base = &buffer, .iov_len = sizeof(buffer)},
-    };
-    sockaddr_ll remote;
-    msghdr msg{
-        .msg_name = &remote,
-        .msg_namelen = sizeof(remote),
-        .msg_iov = iov,
-        .msg_iovlen = sizeof(iov) / sizeof(iovec),
+    ip header{
+        .ip_hl = 5,
+        .ip_v = 4,
+        .ip_ttl = 64,
+        .ip_dst = devices.tun_address(),
     };
     while (1)
     {
-        auto size = devices.receive(&msg);
-        switch (header.ip_p)
-        {
-        case 0:  // ipv6 hbh
-        case 1:  // icmp
-        case 2:  // igmp
-        case 4:  // ip in ip
-        case 6:  // tcp
-        case 17: // udp
-            break;
-
-        default:
-        {
-            std::cout << &header << std::endl
-                      << extra.host << '[' << extra.id << "]: \"" << buffer
-                      << "\" from " << devices[remote.sll_ifindex] << std::endl;
-            break;
-        }
-        }
+        auto [msg, index] = devices.receive_from(buffer, sizeof(buffer));
+        if (index <= 0)
+            continue;
+        header.ip_len = 20 + msg.size;
+        header.ip_p = msg.protocol;
+        header.ip_src = msg.remote;
+        std::cout << &header << std::endl
+                  << '[' << msg.id << "]: \"" << buffer
+                  << "\" from " << devices[index] << std::endl;
     }
 }
 
@@ -75,7 +55,7 @@ std::ostream &operator<<(std::ostream &stream, const ip *ip_pack)
            << "verson:          " << ip_pack->ip_v << std::endl
            << "len_head:        " << ip_pack->ip_hl << std::endl
            << "service type:    " << +ip_pack->ip_tos << std::endl
-           << "len_pack:        " << ntohs(ip_pack->ip_len) << std::endl
+           << "len_pack:        " << ip_pack->ip_len << std::endl
            << "-----------------" << std::endl
            << "pack_id:         " << (ip_pack->ip_id & 0x1fu) << std::endl
            << "fragment offset: " << ip_pack->ip_off << std::endl

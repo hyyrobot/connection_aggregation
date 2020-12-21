@@ -14,10 +14,11 @@
 
 namespace autolabor::connection_aggregation
 {
-    net_devices_t::net_devices_t(const char *host)
+    net_devices_t::net_devices_t(const char *host, in_addr address)
         : _tun(open("/dev/net/tun", O_RDWR)),
           _netlink(socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE)),
-          _receiver(socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_IP)))
+          _receiver(socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_IP))),
+          _tun_address(address)
     {
         // 顺序不能变：
         // 1. 绑定 netlink
@@ -27,11 +28,11 @@ namespace autolabor::connection_aggregation
         // 3. 获取 TUN index
         uint32_t wait_tun_index(const fd_guard_t &, const char *);
         // 4. 配置 TUN
-        void config_tun(const fd_guard_t &, uint32_t);
+        void config_tun(const fd_guard_t &, uint32_t, in_addr);
 
         bind_netlink(_netlink, RTMGRP_LINK | RTMGRP_IPV4_IFADDR);
         register_tun(_tun, _tun_name);
-        config_tun(_netlink, _tun_index = wait_tun_index(_netlink, _tun_name));
+        config_tun(_netlink, _tun_index = wait_tun_index(_netlink, _tun_name), _tun_address);
 
         sockaddr_nl kernel{.nl_family = AF_NETLINK};
         const struct
@@ -174,7 +175,7 @@ namespace autolabor::connection_aggregation
         }
     }
 
-    void config_tun(const fd_guard_t &fd, uint32_t index)
+    void config_tun(const fd_guard_t &fd, uint32_t index, in_addr address)
     {
         // 设置网卡到启动状态的请求包
         struct
@@ -203,7 +204,7 @@ namespace autolabor::connection_aggregation
             nlmsghdr header;
             ifaddrmsg message;
             rtattr attributes;
-            uint8_t data[4];
+            in_addr address;
         } request_address{
             .header{
                 .nlmsg_len = sizeof(request_address),
@@ -220,10 +221,10 @@ namespace autolabor::connection_aggregation
                 .ifa_index = static_cast<unsigned>(index),
             },
             .attributes{
-                .rta_len = sizeof(rtattr) + sizeof(request_address.data),
+                .rta_len = sizeof(rtattr) + sizeof(request_address.address),
                 .rta_type = IFA_LOCAL,
             },
-            .data{10, 10, 10, 10},
+            .address = address,
         };
 
         iovec iov[]{
