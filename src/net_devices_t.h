@@ -47,8 +47,9 @@ namespace autolabor::connection_aggregation
         std::unordered_map<unsigned, net_device_t>
             _devices;
 
-        // 远程对象表
+        std::unordered_map<in_addr_t, std::string>
+            _remotes1;
         std::unordered_map<std::string, std::unordered_set<in_addr_t>>
-            _remotes;
+            _remotes2;
     };
 } // namespace autolabor::connection_aggregation
