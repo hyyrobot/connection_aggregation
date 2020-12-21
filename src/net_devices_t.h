@@ -1,4 +1,4 @@
-#include "fd_guard_t.h"
+#include "net_device_t.h"
 
 #include <netinet/in.h>
 #include <linux/if.h>
@@ -8,19 +8,12 @@
 
 namespace autolabor::connection_aggregation
 {
-    struct net_device_t
-    {
-        char name[IFNAMSIZ];
-        std::unordered_map<in_addr_t, uint8_t> addresses;
-        fd_guard_t out;
-    };
-
     struct net_devices_t
     {
         net_devices_t();
 
         size_t receive(msghdr *) const;
-        std::unordered_map<unsigned, size_t> send(msghdr *) const;
+        std::unordered_map<unsigned, size_t> send_to(const uint8_t *, size_t, in_addr, unsigned) const;
 
         std::string operator[](unsigned) const;
 

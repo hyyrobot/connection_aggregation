@@ -29,24 +29,13 @@ namespace autolabor::connection_aggregation
         // 4. 配置 TUN
         void config_tun(const fd_guard_t &, uint32_t);
         // 5. 获取设备列表
-        std::unordered_map<unsigned, net_device_t> list_devices(const fd_guard_t &);
-        // 6. 过滤设备列表，构造发送套接字
-        fd_guard_t build_send_socket(const char *, in_addr);
+        std::unordered_map<unsigned, net_device_t> list_devices(const fd_guard_t &, const char *);
 
         bind_netlink(_netlink, RTMGRP_LINK | RTMGRP_IPV4_IFADDR);
         register_tun(_tun, _tun_name);
         config_tun(_netlink, _tun_index = wait_tun_index(_netlink, _tun_name));
 
-        _devices = list_devices(_netlink);
-        for (auto p = _devices.begin(); p != _devices.end();)
-            if (std::strcmp(p->second.name, _tun_name) == 0 || std::strcmp(p->second.name, "lo") == 0)
-                p = _devices.erase(p);
-            else
-            {
-                auto &link = p->second;
-                link.out = build_send_socket(link.name, in_addr{link.addresses.begin()->first});
-                ++p;
-            }
+        _devices = list_devices(_netlink, _tun_name);
 
         { // 显示内部细节
             std::stringstream builder;
@@ -54,12 +43,9 @@ namespace autolabor::connection_aggregation
             char text[16];
             for (const auto &device : _devices)
             {
-                builder << device.second.name << '(' << device.first << "):" << std::endl;
-                for (const auto &address : device.second.addresses)
-                {
-                    inet_ntop(AF_INET, &address.first, text, sizeof(text));
-                    builder << "  " << text << '/' << +address.second << std::endl;
-                }
+                auto address = device.second.address();
+                inet_ntop(AF_INET, &address, text, sizeof(text));
+                builder << device.second.name() << '(' << device.first << "): " << text << std::endl;
             }
             std::cout << builder.str() << std::endl;
         }
@@ -196,7 +182,7 @@ namespace autolabor::connection_aggregation
         }
     }
 
-    std::unordered_map<unsigned, net_device_t> list_devices(const fd_guard_t &fd)
+    std::unordered_map<unsigned, net_device_t> list_devices(const fd_guard_t &fd, const char *tun_name)
     {
         sockaddr_nl kernel{.nl_family = AF_NETLINK};
         struct
@@ -242,7 +228,7 @@ namespace autolabor::connection_aggregation
                 case RTM_NEWADDR:
                 {
                     const char *name = nullptr;
-                    in_addr_t address;
+                    in_addr address;
 
                     ifaddrmsg *ifa = (ifaddrmsg *)NLMSG_DATA(h);
                     const rtattr *attributes[IFLA_MAX + 1]{};
@@ -255,15 +241,13 @@ namespace autolabor::connection_aggregation
                             name = reinterpret_cast<char *>(RTA_DATA(rta));
                             break;
                         case IFA_LOCAL:
-                            address = *reinterpret_cast<in_addr_t *>(RTA_DATA(rta));
+                            address = *reinterpret_cast<in_addr *>(RTA_DATA(rta));
                             break;
                         }
-                    if (name)
+                    if (name && std::strcmp(name, tun_name) != 0 && std::strcmp(name, "lo") != 0)
                     {
-                        auto temp = result.try_emplace(ifa->ifa_index, net_device_t{});
-                        if (temp.second)
-                            std::strcpy(temp.first->second.name, name);
-                        temp.first->second.addresses[address] = ifa->ifa_prefixlen;
+                        auto temp = result.try_emplace(ifa->ifa_index, "robot", name);
+                        temp.first->second.push_address(address);
                     }
                 }
                 break;
@@ -274,28 +258,6 @@ namespace autolabor::connection_aggregation
         }
 
         return result;
-    }
-
-    fd_guard_t build_send_socket(const char *name, in_addr addr)
-    {
-        constexpr static auto IPPROTO_MINE = 3;
-        constexpr static auto on = 1;
-
-        fd_guard_t fd(socket(AF_INET, SOCK_RAW, IPPROTO_MINE));               // 建立一个网络层原始套接字
-        setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on));              // 指定协议栈不再向发出的分组添加 ip 头
-        setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, name, std::strlen(name)); // 绑定套接字到网卡
-
-        sockaddr_in local{
-            .sin_family = AF_INET,
-            .sin_port = 0,
-            .sin_addr = addr,
-        };
-        if (bind(fd, (sockaddr *)&local, sizeof(local)) == 0)
-            return fd;
-
-        std::stringstream builder;
-        builder << "Failed to bind fd to address of " << name << ": " << strerror(errno);
-        throw std::runtime_error(builder.str());
     }
 
 } // namespace autolabor::connection_aggregation

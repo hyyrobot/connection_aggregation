@@ -10,7 +10,11 @@ namespace autolabor::connection_aggregation
         return recvmsg(_receiver, msg, 0);
     }
 
-    std::unordered_map<unsigned, size_t> net_devices_t::send(msghdr *msg) const
+    std::unordered_map<unsigned, size_t> net_devices_t::send_to(
+        const uint8_t *payload,
+        size_t size,
+        in_addr remote,
+        unsigned id) const
     {
         std::unordered_map<unsigned, size_t> result;
         // if(查到对应主机)
@@ -18,7 +22,7 @@ namespace autolabor::connection_aggregation
         // else
         //   从每个端口发送
         for (const auto &device : _devices)
-            result[device.first] = sendmsg(device.second.out, msg, 0);
+            result[device.first] = device.second.send_to(payload, size, remote, id);
         return result;
     }
 
@@ -29,7 +33,7 @@ namespace autolabor::connection_aggregation
             return "unknown";
 
         std::stringstream builder;
-        builder << p->second.name << '[' << index << ']';
+        builder << p->second.name() << '[' << index << ']';
         return builder.str();
     }
 } // namespace autolabor::connection_aggregation

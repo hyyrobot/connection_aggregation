@@ -8,6 +8,9 @@ add_library(kernel
     src/fd_guard_t.h
     src/fd_guard_t.cpp
     
+    src/net_device_t.h
+    src/net_device_t.cpp
+
     src/net_devices_t.h
     src/net_devices_t_constructor.cpp
     src/net_devices_t_others.cpp
