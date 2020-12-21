@@ -14,7 +14,7 @@
 
 namespace autolabor::connection_aggregation
 {
-    net_devices_t::net_devices_t()
+    net_devices_t::net_devices_t(const char *host)
         : _tun(open("/dev/net/tun", O_RDWR)),
           _netlink(socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE)),
           _receiver(socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_IP)))
@@ -28,14 +28,82 @@ namespace autolabor::connection_aggregation
         uint32_t wait_tun_index(const fd_guard_t &, const char *);
         // 4. 配置 TUN
         void config_tun(const fd_guard_t &, uint32_t);
-        // 5. 获取设备列表
-        std::unordered_map<unsigned, net_device_t> list_devices(const fd_guard_t &, const char *);
 
         bind_netlink(_netlink, RTMGRP_LINK | RTMGRP_IPV4_IFADDR);
         register_tun(_tun, _tun_name);
         config_tun(_netlink, _tun_index = wait_tun_index(_netlink, _tun_name));
 
-        _devices = list_devices(_netlink, _tun_name);
+        sockaddr_nl kernel{.nl_family = AF_NETLINK};
+        const struct
+        {
+            nlmsghdr header;
+            rtgenmsg message;
+        } request{
+            .header{
+                .nlmsg_len = sizeof(request),
+                .nlmsg_type = RTM_GETADDR,
+                .nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP,
+                .nlmsg_seq = 0,
+                .nlmsg_pid = static_cast<unsigned>(getpid()),
+            },
+            .message{
+                .rtgen_family = AF_UNSPEC,
+            },
+        };
+        if (sendto(_netlink, &request, sizeof(request), 0, (const sockaddr *)&kernel, request.header.nlmsg_len) < 0)
+        {
+            std::stringstream builder;
+            builder << "Failed to ask addresses, because: " << strerror(errno);
+            throw std::runtime_error(builder.str());
+        }
+
+        auto loop = true;
+        uint8_t buffer[8192];
+        while (loop)
+        {
+            auto pack_size = read(_netlink, buffer, sizeof(buffer));
+            if (pack_size < 0)
+            {
+                std::stringstream builder;
+                builder << "Failed to read netlink, because: " << strerror(errno);
+                throw std::runtime_error(builder.str());
+            }
+
+            for (auto h = reinterpret_cast<const nlmsghdr *>(buffer); NLMSG_OK(h, pack_size); h = NLMSG_NEXT(h, pack_size))
+                switch (h->nlmsg_type)
+                {
+                case RTM_NEWADDR:
+                {
+                    const char *name = nullptr;
+                    in_addr address;
+
+                    ifaddrmsg *ifa = (ifaddrmsg *)NLMSG_DATA(h);
+                    const rtattr *attributes[IFLA_MAX + 1]{};
+                    const rtattr *rta = IFA_RTA(ifa);
+                    auto l = h->nlmsg_len - ((uint8_t *)rta - (uint8_t *)h);
+                    for (; RTA_OK(rta, l); rta = RTA_NEXT(rta, l))
+                        switch (rta->rta_type)
+                        {
+                        case IFA_LABEL:
+                            name = reinterpret_cast<char *>(RTA_DATA(rta));
+                            break;
+                        case IFA_LOCAL:
+                            address = *reinterpret_cast<in_addr *>(RTA_DATA(rta));
+                            break;
+                        }
+                    if (name && std::strcmp(name, _tun_name) != 0 && std::strcmp(name, "lo") != 0)
+                    {
+                        auto [p, success] = _devices.try_emplace(ifa->ifa_index, host, name);
+                        if (success)
+                            p->second.push_address(address);
+                    }
+                }
+                break;
+                case NLMSG_DONE:
+                    loop = false;
+                    break;
+                }
+        }
 
         { // 显示内部细节
             std::stringstream builder;
@@ -180,84 +248,6 @@ namespace autolabor::connection_aggregation
             builder << "Failed to set network ip, because: " << strerror(errno);
             throw std::runtime_error(builder.str());
         }
-    }
-
-    std::unordered_map<unsigned, net_device_t> list_devices(const fd_guard_t &fd, const char *tun_name)
-    {
-        sockaddr_nl kernel{.nl_family = AF_NETLINK};
-        struct
-        {
-            nlmsghdr header;
-            rtgenmsg message;
-        } request{
-            .header{
-                .nlmsg_len = sizeof(request),
-                .nlmsg_type = RTM_GETADDR,
-                .nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP,
-                .nlmsg_seq = 0,
-                .nlmsg_pid = static_cast<unsigned>(getpid()),
-            },
-            .message{
-                .rtgen_family = AF_UNSPEC,
-            },
-        };
-        if (sendto(fd, &request, sizeof(request), 0, (const sockaddr *)&kernel, request.header.nlmsg_len) < 0)
-        {
-            std::stringstream builder;
-            builder << "Failed to ask addresses, because: " << strerror(errno);
-            throw std::runtime_error(builder.str());
-        }
-
-        std::unordered_map<unsigned, net_device_t> result;
-
-        auto loop = true;
-        uint8_t buffer[8192];
-        while (loop)
-        {
-            auto pack_size = read(fd, buffer, sizeof(buffer));
-            if (pack_size < 0)
-            {
-                std::stringstream builder;
-                builder << "Failed to read netlink, because: " << strerror(errno);
-                throw std::runtime_error(builder.str());
-            }
-
-            for (auto h = reinterpret_cast<const nlmsghdr *>(buffer); NLMSG_OK(h, pack_size); h = NLMSG_NEXT(h, pack_size))
-                switch (h->nlmsg_type)
-                {
-                case RTM_NEWADDR:
-                {
-                    const char *name = nullptr;
-                    in_addr address;
-
-                    ifaddrmsg *ifa = (ifaddrmsg *)NLMSG_DATA(h);
-                    const rtattr *attributes[IFLA_MAX + 1]{};
-                    const rtattr *rta = IFA_RTA(ifa);
-                    auto l = h->nlmsg_len - ((uint8_t *)rta - (uint8_t *)h);
-                    for (; RTA_OK(rta, l); rta = RTA_NEXT(rta, l))
-                        switch (rta->rta_type)
-                        {
-                        case IFA_LABEL:
-                            name = reinterpret_cast<char *>(RTA_DATA(rta));
-                            break;
-                        case IFA_LOCAL:
-                            address = *reinterpret_cast<in_addr *>(RTA_DATA(rta));
-                            break;
-                        }
-                    if (name && std::strcmp(name, tun_name) != 0 && std::strcmp(name, "lo") != 0)
-                    {
-                        auto temp = result.try_emplace(ifa->ifa_index, "robot", name);
-                        temp.first->second.push_address(address);
-                    }
-                }
-                break;
-                case NLMSG_DONE:
-                    loop = false;
-                    break;
-                }
-        }
-
-        return result;
     }
 
 } // namespace autolabor::connection_aggregation

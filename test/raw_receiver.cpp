@@ -12,7 +12,7 @@ int main()
 {
     using namespace autolabor::connection_aggregation;
 
-    const net_devices_t devices;
+    const net_devices_t devices("user");
 
     ip header{};
     struct
@@ -61,9 +61,9 @@ std::ostream &operator<<(std::ostream &stream, const in_addr ip)
 {
     auto temp = reinterpret_cast<const uint8_t *>(&ip);
     stream << +temp[0] << '.'
-            << +temp[1] << '.'
-            << +temp[2] << '.'
-            << +temp[3];
+           << +temp[1] << '.'
+           << +temp[2] << '.'
+           << +temp[3];
     return stream;
 }
 
