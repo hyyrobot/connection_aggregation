@@ -43,22 +43,5 @@ namespace autolabor::connection_aggregation
     {
         return _fd;
     }
-
-    fd_guard_t bind_netlink(uint32_t groups)
-    {
-        fd_guard_t fd(socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE));
-
-        const static sockaddr_nl local{
-            .nl_family = AF_NETLINK,
-            .nl_pad = 0,
-            .nl_pid = static_cast<unsigned>(getpid()),
-            .nl_groups = RTMGRP_LINK,
-        };
-        if (bind(fd, reinterpret_cast<const sockaddr *>(&local), sizeof(local)) == 0)
-            return fd;
-
-        std::stringstream builder;
-        builder << "Failed to bind netlink socket, because: " << strerror(errno);
-        throw std::runtime_error(builder.str());
-    }
+    
 } // namespace autolabor::connection_aggregation

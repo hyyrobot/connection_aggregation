@@ -6,6 +6,7 @@
 
 namespace autolabor::connection_aggregation
 {
+    /** RAII 管理文件描述符 */
     struct fd_guard_t
     {
         // RAII
@@ -31,9 +32,6 @@ namespace autolabor::connection_aggregation
         int _fd;
     };
 
-    // 创建并绑定关于特定消息组的 netlink 套接字
-    fd_guard_t bind_netlink(uint32_t);
-    
 } // namespace autolabor::connection_aggregation
 
 #endif // FD_GUARD_T_H
