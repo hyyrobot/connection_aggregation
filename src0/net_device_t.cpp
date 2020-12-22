@@ -25,17 +25,17 @@ namespace autolabor::connection_aggregation
 
     bool net_device_t::push_address(in_addr address)
     {
-        auto p = std::find(_addresses.begin(), _addresses.end(), address);
+        auto p = std::find(_addresses.begin(), _addresses.end(), address.s_addr);
         if (p != _addresses.end())
             return false;
 
-        _addresses.push_back(address);
+        _addresses.push_back(address.s_addr);
         return true;
     }
 
     bool net_device_t::erase_address(in_addr address)
     {
-        auto p = std::find(_addresses.begin(), _addresses.end(), address);
+        auto p = std::find(_addresses.begin(), _addresses.end(), address.s_addr);
         if (p != _addresses.end())
             return false;
 
@@ -45,7 +45,7 @@ namespace autolabor::connection_aggregation
 
     in_addr net_device_t::address() const
     {
-        return _addresses.empty() ? in_addr{} : _addresses.front();
+        return _addresses.empty() ? in_addr{} : in_addr{_addresses.front()};
     }
 
     size_t net_device_t::send(const msghdr *msg) const
