@@ -24,7 +24,7 @@ namespace autolabor::connection_aggregation
 
     private:
         char _name[IFNAMSIZ];
-        std::vector<in_addr> _addresses;
+        std::vector<in_addr_t> _addresses;
         fd_guard_t _socket;
     };
 
