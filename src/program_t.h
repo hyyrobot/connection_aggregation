@@ -1,7 +1,10 @@
+#ifndef PROGRAM_T_H
+#define PROGRAM_T_H
+
 #include "net_device_t.h"
+#include "tun_device_t.h"
 
 #include <unordered_map>
-#include <unordered_set>
 
 namespace autolabor::connection_aggregation
 {
@@ -13,7 +16,12 @@ namespace autolabor::connection_aggregation
 
     struct program_t
     {
+        program_t();
+
     private:
+        // tun 设备
+        tun_device_t _tun;
+
         // 本地网卡表
         // - 用网卡序号索引
         // - 来源：本地网络监测
@@ -53,3 +61,5 @@ namespace autolabor::connection_aggregation
     };
 
 } // namespace autolabor::connection_aggregation
+
+#endif // PROGRAM_T_H

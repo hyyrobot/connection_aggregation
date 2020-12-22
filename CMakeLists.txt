@@ -12,6 +12,8 @@ add_library(kernel
     src/net_device_t.cpp
 
     src/tun_device_t.h
+    src/tun_device_t.cpp
+    
     src/program_t.h
 )
 
