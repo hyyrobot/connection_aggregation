@@ -17,52 +17,7 @@ namespace autolabor::connection_aggregation
         : _netlink(bind_netlink(RTMGRP_LINK | RTMGRP_IPV4_IFADDR)),
           _tun(_netlink, host, address)
     {
-        std::thread([this] {
-            auto loop = true;
-            uint8_t buffer[8192];
-            while (loop)
-            {
-                auto pack_size = read(_netlink, buffer, sizeof(buffer));
-                if (pack_size < 0)
-                {
-                    std::stringstream builder;
-                    builder << "Failed to read netlink, because: " << strerror(errno);
-                    throw std::runtime_error(builder.str());
-                }
-
-                for (auto h = reinterpret_cast<const nlmsghdr *>(buffer); NLMSG_OK(h, pack_size); h = NLMSG_NEXT(h, pack_size))
-                    switch (h->nlmsg_type)
-                    {
-                    case RTM_NEWADDR:
-                    {
-                        const char *name = nullptr;
-                        in_addr address;
-
-                        ifaddrmsg *ifa = (ifaddrmsg *)NLMSG_DATA(h);
-                        const rtattr *attributes[IFLA_MAX + 1]{};
-                        const rtattr *rta = IFA_RTA(ifa);
-                        auto l = h->nlmsg_len - ((uint8_t *)rta - (uint8_t *)h);
-                        for (; RTA_OK(rta, l); rta = RTA_NEXT(rta, l))
-                            switch (rta->rta_type)
-                            {
-                            case IFA_LABEL:
-                                name = reinterpret_cast<char *>(RTA_DATA(rta));
-                                break;
-                            case IFA_LOCAL:
-                                address = *reinterpret_cast<in_addr *>(RTA_DATA(rta));
-                                break;
-                            }
-                        if (name && std::strcmp(name, _tun.name()) != 0 && std::strcmp(name, "lo") != 0)
-                            address_added(ifa->ifa_index, name, address);
-                    }
-                    break;
-                    case NLMSG_DONE:
-                        loop = false;
-                        break;
-                    }
-            }
-        }).detach();
-
+        std::thread([this] { local_monitor(); }).detach();
         send_list_request(_netlink);
     }
 

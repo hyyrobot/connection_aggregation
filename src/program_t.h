@@ -5,8 +5,11 @@
 #include "tun_device_t.h"
 
 #include <unordered_map>
-#include <mutex>
+#include <shared_mutex>
 #include <ostream>
+
+#define WRITE_GRAUD(MUTEX) std::unique_lock<decltype(MUTEX)> MUTEX##_guard(MUTEX)
+#define READ_GRAUD(MUTEX) std::shared_lock<decltype(MUTEX)> MUTEX##_guard(MUTEX)
 
 namespace autolabor::connection_aggregation
 {
@@ -22,15 +25,21 @@ namespace autolabor::connection_aggregation
         friend std::ostream &operator<<(std::ostream &, const program_t &);
 
     private:
-        std::mutex _netlink_mutex;
+        std::shared_mutex
+            _local_mutex,      // 访问本机网卡表
+            _remote_mutex,     // 访问远程网卡表
+            _connection_mutex; // 访问连接表
 
-#define GUARD(MUTEX) std::lock_guard<decltype(MUTEX)> MUTEX##_guard(MUTEX)
-
-        void address_added(unsigned, const char *, in_addr);
-        void address_removed(unsigned, in_addr);
-
-        // 监视本地网络变化
+        // renetlink 套接字
         fd_guard_t _netlink;
+        // 监视本地网络变化
+        void local_monitor();
+        // 发现新的地址或网卡
+        void address_added(unsigned, const char *, in_addr = {});
+        // 移除地址
+        void address_removed(unsigned, in_addr);
+        // 移除网卡
+        void device_removed(unsigned);
 
         // tun 设备
         tun_device_t _tun;
@@ -56,7 +65,7 @@ namespace autolabor::connection_aggregation
             {
                 uint32_t
                     src_index, // 本机网卡序号
-                    dst_indet; // 远程主机网卡序号
+                    dst_index; // 远程主机网卡序号
             };
         };
 
@@ -70,7 +79,7 @@ namespace autolabor::connection_aggregation
         // - 用远程主机地址索引方便发送时构造连接束
         // - 来源：本地网卡表和远程网卡表的笛卡尔积
         std::unordered_map<in_addr_t, connection_map_t>
-            _connection;
+            _connections;
     };
 
 } // namespace autolabor::connection_aggregation

@@ -16,7 +16,7 @@ add_library(kernel
     
     src/program_t.h
     src/program_t_constructor.cpp
-    src/program_t_monitor.cpp
+    src/program_t_local.cpp
 )
 
 find_package(Threads)
