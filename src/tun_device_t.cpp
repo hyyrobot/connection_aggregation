@@ -10,7 +10,7 @@
 
 namespace autolabor::connection_aggregation
 {
-    tun_device_t::tun_device_t(const fd_guard_t &netlink, in_addr address)
+    tun_device_t::tun_device_t(const fd_guard_t &netlink, const char *name, in_addr address)
         : _tun(open("/dev/net/tun", O_RDWR)),
           _address(address)
     {
@@ -22,6 +22,7 @@ namespace autolabor::connection_aggregation
         // 3. 配置 TUN
         void config_tun(const fd_guard_t &, uint32_t, in_addr);
 
+        std::strcpy(_name, name);
         register_tun(_tun, _name);
         config_tun(netlink, _index = wait_tun_index(netlink, _name), _address);
     }
@@ -29,6 +30,7 @@ namespace autolabor::connection_aggregation
     void register_tun(const fd_guard_t &fd, char *name)
     {
         ifreq request{.ifr_ifru{.ifru_flags = IFF_TUN | IFF_NO_PI}};
+        std::strcpy(request.ifr_name, name);
         if (ioctl(fd, TUNSETIFF, (void *)&request) < 0)
         {
             std::stringstream builder;

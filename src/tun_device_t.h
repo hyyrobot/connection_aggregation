@@ -10,7 +10,7 @@ namespace autolabor::connection_aggregation
 {
     struct tun_device_t
     {
-        tun_device_t(const fd_guard_t &, in_addr);
+        tun_device_t(const fd_guard_t &, const char *, in_addr);
 
     private:
         fd_guard_t _tun;

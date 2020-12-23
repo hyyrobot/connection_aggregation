@@ -16,9 +16,11 @@ namespace autolabor::connection_aggregation
 
     struct program_t
     {
-        program_t();
+        program_t(const char *, in_addr);
 
     private:
+        fd_guard_t _netlink;
+
         // tun 设备
         tun_device_t _tun;
 

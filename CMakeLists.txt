@@ -15,7 +15,8 @@ add_library(kernel
     src/tun_device_t.cpp
     
     src/program_t.h
+    src/program_t_constructor.cpp
 )
 
-# add_executable(receive test/raw_receiver.cpp)
-# target_link_libraries(receive kernel)
+add_executable(test test/test.cpp)
+target_link_libraries(test kernel)
