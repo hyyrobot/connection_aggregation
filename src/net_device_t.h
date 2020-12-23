@@ -19,6 +19,7 @@ namespace autolabor::connection_aggregation
         bool push_address(in_addr);
         bool erase_address(in_addr);
         in_addr address() const;
+        size_t addresses_size() const;
 
         size_t send(const msghdr *) const;
 

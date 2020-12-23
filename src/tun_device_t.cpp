@@ -27,6 +27,15 @@ namespace autolabor::connection_aggregation
         config_tun(netlink, _index = wait_tun_index(netlink, _name), _address);
     }
 
+    const char *tun_device_t::name() const
+    {
+        return _name;
+    }
+    unsigned tun_device_t::index() const
+    {
+        return _index;
+    }
+
     void register_tun(const fd_guard_t &fd, char *name)
     {
         ifreq request{.ifr_ifru{.ifru_flags = IFF_TUN | IFF_NO_PI}};

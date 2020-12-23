@@ -48,6 +48,11 @@ namespace autolabor::connection_aggregation
         return _addresses.empty() ? in_addr{} : in_addr{_addresses.front()};
     }
 
+    size_t net_device_t::addresses_size() const
+    {
+        return _addresses.size();
+    }
+
     size_t net_device_t::send(const msghdr *msg) const
     {
         return sendmsg(_socket, msg, 0);

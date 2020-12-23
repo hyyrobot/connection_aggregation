@@ -16,7 +16,10 @@ add_library(kernel
     
     src/program_t.h
     src/program_t_constructor.cpp
+    src/program_t_monitor.cpp
 )
 
+find_package(Threads)
+
 add_executable(test test/test.cpp)
-target_link_libraries(test kernel)
+target_link_libraries(test kernel ${CMAKE_THREAD_LIBS_INIT})

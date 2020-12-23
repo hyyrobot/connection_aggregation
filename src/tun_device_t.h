@@ -12,6 +12,9 @@ namespace autolabor::connection_aggregation
     {
         tun_device_t(const fd_guard_t &, const char *, in_addr);
 
+        const char *name() const;
+        unsigned index() const;
+
     private:
         fd_guard_t _tun;
 

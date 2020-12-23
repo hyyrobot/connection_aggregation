@@ -5,6 +5,8 @@
 #include "tun_device_t.h"
 
 #include <unordered_map>
+#include <mutex>
+#include <ostream>
 
 namespace autolabor::connection_aggregation
 {
@@ -17,8 +19,17 @@ namespace autolabor::connection_aggregation
     struct program_t
     {
         program_t(const char *, in_addr);
+        friend std::ostream &operator<<(std::ostream &, const program_t &);
 
     private:
+        std::mutex _netlink_mutex;
+
+#define GUARD(MUTEX) std::lock_guard<decltype(MUTEX)> MUTEX##_guard(MUTEX)
+
+        void address_added(unsigned, const char *, in_addr);
+        void address_removed(unsigned, in_addr);
+
+        // 监视本地网络变化
         fd_guard_t _netlink;
 
         // tun 设备
