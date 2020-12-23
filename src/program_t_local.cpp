@@ -1,6 +1,5 @@
 #include "program_t.h"
 
-#include <arpa/inet.h>
 #include <unistd.h>
 
 #include <sstream>
@@ -27,16 +26,21 @@ namespace autolabor::connection_aggregation
                 case RTM_NEWLINK:
                 {
                     const ifinfomsg *ifi = (struct ifinfomsg *)NLMSG_DATA(h);
-                    const rtattr *rta = IFLA_RTA(ifi);
-                    auto l = h->nlmsg_len - ((uint8_t *)rta - (uint8_t *)h);
-                    for (; RTA_OK(rta, l); rta = RTA_NEXT(rta, l))
-                        if (rta->rta_type == IFLA_IFNAME)
-                        {
-                            const char *name = reinterpret_cast<char *>(RTA_DATA(rta));
-                            if (name && std::strcmp(name, _tun.name()) != 0 && std::strcmp(name, "lo") != 0)
-                                address_added(ifi->ifi_index, name);
-                            break;
-                        }
+                    if (ifi->ifi_flags & IFF_UP)
+                    {
+                        const rtattr *rta = IFLA_RTA(ifi);
+                        auto l = h->nlmsg_len - ((uint8_t *)rta - (uint8_t *)h);
+                        for (; RTA_OK(rta, l); rta = RTA_NEXT(rta, l))
+                            if (rta->rta_type == IFLA_IFNAME)
+                            {
+                                const char *name = reinterpret_cast<char *>(RTA_DATA(rta));
+                                if (name && std::strcmp(name, _tun.name()) != 0 && std::strcmp(name, "lo") != 0)
+                                    address_added(ifi->ifi_index, name);
+                                break;
+                            }
+                    }
+                    else // 关闭的网卡相当于删除
+                        device_removed(((struct ifinfomsg *)NLMSG_DATA(h))->ifi_index);
                     break;
                 }
 
@@ -145,20 +149,6 @@ namespace autolabor::connection_aggregation
                 p.erase(key.key);
             }
         }
-    }
-
-    std::ostream &operator<<(std::ostream &out, const program_t &program)
-    {
-        out << "- tun device: " << program._tun.name() << '(' << program._tun.index() << ')' << std::endl
-            << "- local devices:" << std::endl;
-        char text[IFNAMSIZ];
-        for (const auto &device : program._devices)
-        {
-            auto address = device.second.address();
-            inet_ntop(AF_INET, &address, text, sizeof(text));
-            out << "  - " << device.second.name() << '(' << device.first << "): " << text << std::endl;
-        }
-        return out;
     }
 
 } // namespace autolabor::connection_aggregation

@@ -3,6 +3,7 @@
 
 #include "net_device_t.h"
 #include "tun_device_t.h"
+#include "connection_info_t.h"
 
 #include <unordered_map>
 #include <shared_mutex>
@@ -13,15 +14,11 @@
 
 namespace autolabor::connection_aggregation
 {
-    /** 连接附加信息 */
-    struct connection_info_t
-    {
-        // 此处应有同步状态、带宽、时延、丢包率等
-    };
-
     struct program_t
     {
         program_t(const char *, in_addr);
+
+        bool add_remote(in_addr, unsigned, in_addr);
 
         inline int receiver() const
         {
@@ -31,7 +28,7 @@ namespace autolabor::connection_aggregation
         friend std::ostream &operator<<(std::ostream &, const program_t &);
 
     private:
-        std::shared_mutex
+        mutable std::shared_mutex
             _local_mutex,      // 访问本机网卡表
             _remote_mutex,     // 访问远程网卡表
             _connection_mutex; // 访问连接表

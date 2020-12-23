@@ -1,36 +1,37 @@
+#include "program_t.h"
+
 #include <netinet/ip.h>
 #include <arpa/inet.h>
+#include <unistd.h>
 
-#include "net_devices_t.h"
-#include <iostream>
-#include <chrono>
 #include <thread>
-#include <cstring>
+#include <iostream>
+
+std::ostream &operator<<(std::ostream &, const ip &);
 
 int main()
 {
     using namespace autolabor::connection_aggregation;
 
-    in_addr address;
-    inet_pton(AF_INET, "100.100.100.100", &address);
-    net_devices_t devices("robot", address);
-    const char *text = "hello";
-    ip header{
-        .ip_hl = 5,
-        .ip_v = 4,
-        .ip_len = 26,
-        .ip_ttl = 64,
-        .ip_p = 77,
-    };
-    uint8_t id = 0;
-    inet_pton(AF_INET, "192.168.18.183", &header.ip_dst);
-    while (true)
-    {
-        std::cout << +id << ": " << devices.send(header, id++, (const uint8_t *)text) << std::endl;
+    in_addr address0, address1;
+    inet_pton(AF_INET, "10.0.0.1", &address0);
+    program_t program("user", address0);
 
-        using namespace std::chrono_literals;
-        std::this_thread::sleep_for(.5s);
-    }
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(.1s);
+
+    inet_pton(AF_INET, "10.0.0.2", &address0);
+    inet_pton(AF_INET, "192.168.18.186", &address1);
+    program.add_remote(address0, 2, address1);
+
+    inet_pton(AF_INET, "10.0.0.2", &address0);
+    inet_pton(AF_INET, "8.8.8.8", &address1);
+    program.add_remote(address0, 4, address1);
+
+    std::cout << program;
+
+    while (true)
+        ;
 
     return 0;
 }

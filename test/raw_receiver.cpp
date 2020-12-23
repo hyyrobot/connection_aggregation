@@ -2,6 +2,8 @@
 
 #include <netinet/ip.h>
 #include <arpa/inet.h>
+#include <unistd.h>
+
 #include <thread>
 #include <iostream>
 
@@ -20,13 +22,17 @@ int main()
 
     std::cout << program << std::endl;
 
-    unsigned char buffer[32];
-    ip header{};
+    unsigned char buffer[1024];
 
     while (true)
     {
-        std::cout << program << std::endl;
-        std::cout << &header << std::endl;
+        auto n = read(program.receiver(), buffer, sizeof(buffer));
+        auto header = reinterpret_cast<ip *>(buffer);
+        if (header->ip_p != 6 && header->ip_p != 17)
+        {
+            std::cout << *header << std::endl;
+            std::cout << program;
+        }
     }
 
     return 0;

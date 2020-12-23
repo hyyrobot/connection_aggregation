@@ -242,3 +242,77 @@ namespace autolabor::connection_aggregation
 
 } // namespace autolabor::connection_aggregation
 ```
+
+## [20201223] 流水账
+
+### 实现连接监视
+
+通过 rtnetlink 的跟踪，在本机网卡发生变化时，可以实时调整连接，
+从新的网卡建立新的连接，删除关闭或下线的网卡上的连接。
+
+```c++
+std::shared_mutex
+  _local_mutex,      // 访问本机网卡表
+  _remote_mutex,     // 访问远程网卡表
+  _connection_mutex; // 访问连接表
+
+// rtnetlink 套接字
+fd_guard_t _netlink;
+// 监视本地网络变化
+void local_monitor();
+// 发现新的地址或网卡
+void address_added(unsigned, const char *, in_addr = {});
+// 移除地址
+void address_removed(unsigned, in_addr);
+// 移除网卡
+void device_removed(unsigned);
+```
+
+网络上数据包到达本机时，将调整远程网卡和连接。
+或可由 api 写入固定的远程地址，适用于向虚拟路由器发起连接。
+目前仅实现了 public method：
+
+```c++
+bool add_remote(in_addr, unsigned, in_addr);
+```
+
+### 程序状态描述
+
+打印程序状态如下：
+
+```bash
+- tun device: user(20)
+- local devices:
+  - ens33(2): 192.168.18.185
+- remote devices:
+  - 10.0.0.2:
+    - 4: 8.8.8.8
+    - 2: 192.168.18.186
+- connections:
+  - 10.0.0.2:
+    - 2 -> 4 : ...
+    - 2 -> 2 : ...
+```
+
+分别是 tun 设备的名字和序号、已启动的本地网卡、已知的远程虚拟地址、网卡和实际地址、已建立的连接。
+连接后面应该显示连接状态，但还没设计好。
+
+### 设计收发函数和协议
+
+包分为 3 类：
+
+1. 基于单连接的包：
+   1. 连接握手协议
+   2. 用于性能探测的流量填充包
+2. 基于连接束的内部包：
+   1. 其他用于系统内部的协议包（如虚拟 DHCP、OSPF）
+3. 来自应用层的数据包：
+   1. 发送到本机应用的数据包
+   2. 需要本机转发、发送到其他主机的数据包
+
+3 种包都需要的附加信息：
+
+1. 虚拟网络中的源地址
+2. 连接描述符（本机网卡号+远程网卡号）
+
+...

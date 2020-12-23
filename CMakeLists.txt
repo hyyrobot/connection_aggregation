@@ -14,12 +14,20 @@ add_library(kernel
     src/tun_device_t.h
     src/tun_device_t.cpp
     
+    src/connection_info_t.h
+    src/connection_info_t.cpp
+
     src/program_t.h
     src/program_t_constructor.cpp
     src/program_t_local.cpp
+    src/program_t_remote.cpp
+    src/program_t_access.cpp
 )
 
 find_package(Threads)
+
+add_executable(send test/raw_sender.cpp)
+target_link_libraries(send kernel ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(receive test/raw_receiver.cpp)
 target_link_libraries(receive kernel ${CMAKE_THREAD_LIBS_INIT})
