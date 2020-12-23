@@ -1,5 +1,6 @@
 #include "program_t.h"
 
+#include <netinet/if_ether.h>
 #include <arpa/inet.h>
 #include <unistd.h> // getpid
 
@@ -15,6 +16,7 @@ namespace autolabor::connection_aggregation
 
     program_t::program_t(const char *host, in_addr address)
         : _netlink(bind_netlink(RTMGRP_LINK | RTMGRP_IPV4_IFADDR)),
+          _receiver(socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_IP))),
           _tun(_netlink, host, address)
     {
         std::thread([this] { local_monitor(); }).detach();

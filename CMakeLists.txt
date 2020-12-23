@@ -21,5 +21,5 @@ add_library(kernel
 
 find_package(Threads)
 
-add_executable(test test/test.cpp)
-target_link_libraries(test kernel ${CMAKE_THREAD_LIBS_INIT})
+add_executable(receive test/raw_receiver.cpp)
+target_link_libraries(receive kernel ${CMAKE_THREAD_LIBS_INIT})

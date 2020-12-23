@@ -22,6 +22,12 @@ namespace autolabor::connection_aggregation
     struct program_t
     {
         program_t(const char *, in_addr);
+
+        inline int receiver() const
+        {
+            return _receiver;
+        }
+
         friend std::ostream &operator<<(std::ostream &, const program_t &);
 
     private:
@@ -30,7 +36,7 @@ namespace autolabor::connection_aggregation
             _remote_mutex,     // 访问远程网卡表
             _connection_mutex; // 访问连接表
 
-        // renetlink 套接字
+        // rtnetlink 套接字
         fd_guard_t _netlink;
         // 监视本地网络变化
         void local_monitor();
@@ -40,6 +46,9 @@ namespace autolabor::connection_aggregation
         void address_removed(unsigned, in_addr);
         // 移除网卡
         void device_removed(unsigned);
+
+        // 接收二层套接字
+        fd_guard_t _receiver;
 
         // tun 设备
         tun_device_t _tun;
