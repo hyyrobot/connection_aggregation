@@ -1,9 +1,12 @@
-#include "fd_guard_t.h"
+#ifndef NET_DEVICE_T_H
+#define NET_DEVICE_T_H
 
-#include <netinet/ip.h>
+#include <netinet/in.h>
 #include <linux/if.h>
 
 #include <vector>
+
+#include "fd_guard_t.h"
 
 namespace autolabor::connection_aggregation
 {
@@ -16,8 +19,9 @@ namespace autolabor::connection_aggregation
         bool push_address(in_addr);
         bool erase_address(in_addr);
         in_addr address() const;
+        size_t addresses_size() const;
 
-        size_t send(const msghdr*) const;
+        size_t send(const msghdr *) const;
 
     private:
         char _name[IFNAMSIZ];
@@ -26,3 +30,5 @@ namespace autolabor::connection_aggregation
     };
 
 } // namespace autolabor::connection_aggregation
+
+#endif // NET_DEVICE_T_H
