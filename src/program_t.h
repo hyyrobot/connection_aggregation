@@ -37,7 +37,7 @@ namespace autolabor::connection_aggregation
     struct common_extra_t
     {
         in_addr host;
-        connection_key_union connection;
+        uint32_t src_index, dst_index;
     };
 
     struct nothing_t

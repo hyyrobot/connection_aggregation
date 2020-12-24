@@ -25,15 +25,15 @@ namespace autolabor::connection_aggregation
         if (header->ip_p != IPPROTO_MINE)
             return 0;
 
-        add_remote(common.host, common.connection.src_index, header->ip_src);
+        add_remote(common.host, common.src_index, header->ip_src);
 
         char text[32];
         inet_ntop(AF_INET, &common.host, text, sizeof(text));
-        std::cout << text << '(' << common.connection.src_index << ") -> ";
+        std::cout << text << '(' << common.src_index << ") -> ";
 
         auto address = _tun.address();
         inet_ntop(AF_INET, &address, text, sizeof(text));
-        std::cout << text << '(' << common.connection.dst_index << ')' << std::endl;
+        std::cout << text << '(' << common.dst_index << ')' << std::endl;
 
         return n - sizeof(ip) - sizeof(common_extra_t);
     }

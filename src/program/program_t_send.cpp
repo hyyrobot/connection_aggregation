@@ -18,17 +18,19 @@ namespace autolabor::connection_aggregation
             .ip_ttl = 64,
             .ip_p = IPPROTO_MINE,
         };
+        connection_key_union connection{.key = key};
         common_extra_t extra{
             .host = _tun.address(),
-            .connection{.key = key},
+            .src_index = connection.src_index,
+            .dst_index = connection.dst_index,
         };
         { // 填写基于连接的包序号
             READ_GRAUD(_connection_mutex);
-            header.ip_id = _connections[dst.s_addr][extra.connection.key].get_id();
+            header.ip_id = _connections[dst.s_addr][connection.key].get_id();
         }
         { // 填写物理网络中的目的地址
             READ_GRAUD(_remote_mutex);
-            header.ip_dst = _remotes[dst.s_addr][extra.connection.dst_index];
+            header.ip_dst = _remotes[dst.s_addr][connection.dst_index];
         }
         // 构造消息
         sockaddr_in remote{
@@ -48,7 +50,7 @@ namespace autolabor::connection_aggregation
         };
         // 填写源地址，发送
         READ_GRAUD(_local_mutex);
-        const auto &d = _devices.at(extra.connection.src_index);
+        const auto &d = _devices.at(connection.src_index);
         header.ip_src = d.address();
         return d.send(&msg);
     }
