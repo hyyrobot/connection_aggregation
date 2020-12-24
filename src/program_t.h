@@ -44,7 +44,7 @@ namespace autolabor::connection_aggregation
         bool add_remote(in_addr, uint32_t, in_addr);
 
         // private:
-        size_t send_single(uint8_t *, size_t, in_addr, uint64_t);
+        size_t send_single(uint8_t *, uint16_t, in_addr, uint64_t);
 
         inline int receiver() const
         {

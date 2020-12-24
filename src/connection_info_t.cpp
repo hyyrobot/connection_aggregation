@@ -7,7 +7,8 @@ namespace autolabor::connection_aggregation
 
     uint16_t connection_info_t::next_id()
     {
-        return _out_id++;
+        auto temp = ++_out_id; // `ip::ip_id` 填 0 会导致随机值，需要跳过 0
+        return temp ? temp : ++_out_id;
     }
 
 } // namespace autolabor::connection_aggregation

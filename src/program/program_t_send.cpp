@@ -4,7 +4,7 @@
 
 namespace autolabor::connection_aggregation
 {
-    size_t program_t::send_single(uint8_t *payload, size_t size, in_addr dst, uint64_t connection)
+    size_t program_t::send_single(uint8_t *payload, uint16_t size, in_addr dst, uint64_t connection)
     {
         constexpr static uint16_t header_size = sizeof(ip) + sizeof(common_extra_t);
         common_extra_t extra{

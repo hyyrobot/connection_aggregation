@@ -27,16 +27,19 @@ int main()
 
     while (true)
     {
-        auto n = read(program.receiver(), buffer, sizeof(buffer));
-        auto header = reinterpret_cast<ip *>(buffer);
-        auto common = reinterpret_cast<common_extra_t *>(buffer + sizeof(ip));
+        const auto n = read(program.receiver(), buffer, sizeof(buffer));
+        const auto header = reinterpret_cast<ip *>(buffer);
         if (header->ip_p != IPPROTO_MINE)
             continue;
 
-        std::cout << *header << std::endl;
+        const auto common = reinterpret_cast<common_extra_t *>(buffer + sizeof(ip));
+        program.add_remote(common->host, common->connection.src_index, header->ip_src);
+
         inet_ntop(AF_INET, &common->host, text, sizeof(text));
-        std::cout << text << '(' << common->connection.src_index << ") -> " << common->connection.dst_index << std::endl;
-        std::cout << program;
+        std::cout << *header << std::endl
+                  << text << '(' << common->connection.src_index << ") -> " << common->connection.dst_index << std::endl
+                  << std::endl
+                  << program;
     }
 
     return 0;
