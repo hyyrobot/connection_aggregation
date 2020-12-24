@@ -16,8 +16,13 @@ namespace autolabor::connection_aggregation
         unsigned index() const;
         in_addr address() const;
 
+        inline int socket() const
+        {
+            return _socket;
+        }
+
     private:
-        fd_guard_t _tun;
+        fd_guard_t _socket;
 
         char _name[IFNAMSIZ];
         unsigned _index;

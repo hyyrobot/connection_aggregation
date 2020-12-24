@@ -49,7 +49,7 @@ namespace autolabor::connection_aggregation
     {
         uint8_t type, protocol;
         uint16_t offset;
-        in_addr dst;
+        in_addr src, dst;
     };
 
     struct program_t
@@ -62,13 +62,17 @@ namespace autolabor::connection_aggregation
         const char *name() const;
         in_addr address() const;
 
-        // private:
-        size_t send_single(in_addr, connection_key_union::key_t, const iovec *, size_t);
+        // 发送基于连接的握手包
+        bool send_handshake(in_addr, connection_key_union::key_t);
+
+        // 向特定地址转发数据包
+        size_t forward(in_addr, const ip *, const uint8_t *, size_t);
+
         size_t receive(ip *, uint8_t *, size_t);
 
-        inline int receiver() const
+        inline int tun() const
         {
-            return _receiver;
+            return _tun.socket();
         }
 
         friend std::ostream &operator<<(std::ostream &, const program_t &);
@@ -89,6 +93,9 @@ namespace autolabor::connection_aggregation
         void address_removed(uint32_t, in_addr);
         // 移除网卡
         void device_removed(uint32_t);
+
+        // 发送单个包
+        size_t send_single(in_addr, connection_key_union::key_t, const iovec *, size_t);
 
         // 接收二层套接字
         fd_guard_t _receiver;

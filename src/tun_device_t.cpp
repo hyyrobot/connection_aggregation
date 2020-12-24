@@ -11,7 +11,7 @@
 namespace autolabor::connection_aggregation
 {
     tun_device_t::tun_device_t(const fd_guard_t &netlink, const char *name, in_addr address)
-        : _tun(open("/dev/net/tun", O_RDWR)),
+        : _socket(open("/dev/net/tun", O_RDWR)),
           _address(address)
     {
         // 顺序不能变：
@@ -23,7 +23,7 @@ namespace autolabor::connection_aggregation
         void config_tun(const fd_guard_t &, uint32_t, in_addr);
 
         std::strcpy(_name, name);
-        register_tun(_tun, _name);
+        register_tun(_socket, _name);
         config_tun(netlink, _index = wait_tun_index(netlink, _name), _address);
     }
 

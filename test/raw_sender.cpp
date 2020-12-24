@@ -19,18 +19,44 @@ int main()
     std::this_thread::sleep_for(.1s);
 
     inet_pton(AF_INET, "10.0.0.2", &address0);
-    inet_pton(AF_INET, "192.168.18.189", &address1);
+    inet_pton(AF_INET, "192.168.18.191", &address1);
     program.add_remote(address0, 2, address1);
 
     std::cout << program;
 
-    connection_key_union key;
-    key.src_index = key.dst_index = 2;
+    std::thread([&program, address0] {
+        uint8_t buffer[2048];
+        while (true)
+        {
+            auto n = read(program.tun(), buffer, sizeof(buffer));
+            if (n <= 0)
+            {
+                std::cout << "n = " << n << std::endl;
+                continue;
+            }
+
+            auto header = reinterpret_cast<const ip *>(buffer);
+            if (header->ip_p != IPPROTO_UDP)
+            {
+                std::cout << "p = " << +header->ip_p << std::endl;
+                continue;
+            }
+
+            std::cout << program.forward(address0, header, buffer + sizeof(ip), n - sizeof(header)) << std::endl;
+        }
+    }).detach();
+
+    fd_guard_t udp(socket(AF_INET, SOCK_DGRAM, 0));
+    sockaddr_in remote{
+        .sin_family = AF_INET,
+        .sin_port = 100,
+        .sin_addr = address0,
+    };
     while (true)
     {
-        std::cout << program.send_single(address0, key.key, nullptr, 0) << std::endl;
-
+        std::cout << sendto(udp, "Hello", 6, 0, (sockaddr *)&remote, sizeof(remote)) << std::endl;
         std::this_thread::sleep_for(.5s);
     }
+
     return 0;
 }

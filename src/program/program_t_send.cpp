@@ -5,7 +5,44 @@
 
 namespace autolabor::connection_aggregation
 {
-    size_t program_t::send_single(in_addr dst, connection_key_union::key_t key, const iovec *payload, size_t count)
+    bool program_t::send_handshake(in_addr dst, connection_key_t key)
+    {
+        constexpr static nothing_t nothing{};
+        constexpr static iovec iov{.iov_base = (void *)&nothing, .iov_len = sizeof(nothing)};
+        constexpr static auto size = sizeof(ip) + sizeof(common_extra_t) + sizeof(nothing_t);
+        return size == send_single(dst, key, &iov, 1);
+    }
+
+    size_t program_t::forward(in_addr dst, const ip *header, const uint8_t *buffer, size_t size)
+    {
+        constexpr static auto size_except_payload = sizeof(ip) + sizeof(common_extra_t) + sizeof(forward_t);
+        std::vector<connection_key_t> connections;
+        { // 读取所有可用的连接
+            READ_GRAUD(_connection_mutex);
+            for (const auto &[key, _] : _connections.at(dst.s_addr))
+                connections.push_back(key);
+        }
+        // 构造协议
+        const forward_t extra{
+            .type = 1,
+            .protocol = header->ip_p,
+            .offset = header->ip_off,
+            .dst = dst,
+        };
+        const iovec iov[]{
+            {.iov_base = (void *)&extra, .iov_len = sizeof(extra)},
+            {.iov_base = (void *)buffer, .iov_len = size},
+        };
+        const auto total = size_except_payload + size;
+        // 发送
+        size_t result = 0;
+        for (auto key : connections)
+            if (send_single(dst, key, iov, 2) == total)
+                ++result;
+        return result;
+    }
+
+    size_t program_t::send_single(in_addr dst, connection_key_t key, const iovec *payload, size_t count)
     {
         constexpr static uint16_t header_size = sizeof(ip) + sizeof(common_extra_t);
         // 构造首部
