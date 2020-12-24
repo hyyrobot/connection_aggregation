@@ -16,17 +16,6 @@ namespace autolabor::connection_aggregation
 {
     constexpr uint8_t IPPROTO_MINE = 3;
 
-    struct common_extra_t
-    {
-        in_addr host;
-        enum class type_t : uint8_t
-        {
-            HAND_SHAKE
-        } type;
-        uint8_t zero[3];
-        uint64_t connection;
-    };
-
     // 连接表示法
     union connection_key_union
     {
@@ -40,12 +29,19 @@ namespace autolabor::connection_aggregation
         };
     };
 
+    // 通用 ip 头附加信息
+    struct common_extra_t
+    {
+        in_addr host;
+        connection_key_union connection;
+    };
+
     struct program_t
     {
         program_t(const char *, in_addr);
 
         // 发现新的远程网卡
-        bool add_remote(in_addr, unsigned, in_addr);
+        bool add_remote(in_addr, uint32_t, in_addr);
 
         // private:
         size_t send_single(uint8_t *, size_t, in_addr, uint64_t);
@@ -68,11 +64,11 @@ namespace autolabor::connection_aggregation
         // 监视本地网络变化
         void local_monitor();
         // 发现新的地址或网卡
-        void address_added(unsigned, const char *, in_addr = {});
+        void address_added(uint32_t, const char *, in_addr = {});
         // 移除地址
-        void address_removed(unsigned, in_addr);
+        void address_removed(uint32_t, in_addr);
         // 移除网卡
-        void device_removed(unsigned);
+        void device_removed(uint32_t);
 
         // 接收二层套接字
         fd_guard_t _receiver;
@@ -83,13 +79,13 @@ namespace autolabor::connection_aggregation
         // 本地网卡表
         // - 用网卡序号索引
         // - 来源：本地网络监测
-        std::unordered_map<unsigned, net_device_t>
+        std::unordered_map<uint32_t, net_device_t>
             _devices;
 
         // 远程网卡表
         // - 用远程主机地址和网卡序号索引
         // - 来源：远程数据包接收
-        std::unordered_map<in_addr_t, std::unordered_map<unsigned, in_addr>>
+        std::unordered_map<in_addr_t, std::unordered_map<uint32_t, in_addr>>
             _remotes;
 
         // 用一个整型作为索引以免手工实现 hash

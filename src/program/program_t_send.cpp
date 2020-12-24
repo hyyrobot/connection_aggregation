@@ -9,7 +9,7 @@ namespace autolabor::connection_aggregation
         constexpr static uint16_t header_size = sizeof(ip) + sizeof(common_extra_t);
         common_extra_t extra{
             .host = _tun.address(),
-            .connection = connection,
+            .connection{.key = connection},
         };
         ip header{
             .ip_hl = header_size / 4,
@@ -20,15 +20,13 @@ namespace autolabor::connection_aggregation
             .ip_ttl = 64,
             .ip_p = IPPROTO_MINE,
         };
-        connection_key_union key{.key = extra.connection};
         {
             READ_GRAUD(_connection_mutex);
-            header.ip_off = _connections[dst.s_addr][extra.connection].next_id();
+            header.ip_id = _connections[dst.s_addr][extra.connection.key].next_id();
         }
-
         {
             READ_GRAUD(_remote_mutex);
-            header.ip_dst = _remotes[dst.s_addr][key.dst_index];
+            header.ip_dst = _remotes[dst.s_addr][extra.connection.dst_index];
         }
 
         sockaddr_in remote{
@@ -47,7 +45,7 @@ namespace autolabor::connection_aggregation
             .msg_iovlen = sizeof(iov) / sizeof(iovec),
         };
         READ_GRAUD(_local_mutex);
-        const auto &d = _devices.at(key.src_index);
+        const auto &d = _devices.at(extra.connection.src_index);
         header.ip_src = d.address();
         return d.send(&msg);
     }
