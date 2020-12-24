@@ -40,6 +40,18 @@ namespace autolabor::connection_aggregation
         connection_key_union connection;
     };
 
+    struct nothing_t
+    {
+        uint8_t zero[4];
+    };
+
+    struct forward_t
+    {
+        uint8_t type, protocol;
+        uint16_t offset;
+        in_addr dst;
+    };
+
     struct program_t
     {
         program_t(const char *, in_addr);
@@ -52,6 +64,7 @@ namespace autolabor::connection_aggregation
 
         // private:
         size_t send_single(in_addr, connection_key_union::key_t, const iovec *, size_t);
+        size_t receive(ip *, uint8_t *, size_t);
 
         inline int receiver() const
         {

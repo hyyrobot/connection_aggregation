@@ -39,10 +39,7 @@ namespace autolabor::connection_aggregation
         iov[0] = {.iov_base = &header, .iov_len = sizeof(header)};
         iov[1] = {.iov_base = (void *)&extra, .iov_len = sizeof(extra)};
         for (auto i = 0; i < count; ++i)
-        {
-            header.ip_len += payload[i].iov_len;
-            iov[i + 2] = payload[i];
-        }
+            header.ip_len += (iov[i + 2] = payload[i]).iov_len;
         msghdr msg{
             .msg_name = &remote,
             .msg_namelen = sizeof(remote),

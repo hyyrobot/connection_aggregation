@@ -55,7 +55,7 @@ namespace autolabor::connection_aggregation
 
     size_t net_device_t::send(const msghdr *msg) const
     {
-        return sendmsg(_socket, msg, 0);
+        return sendmsg(_socket, msg, MSG_WAITALL);
     }
 
 } // namespace autolabor::connection_aggregation

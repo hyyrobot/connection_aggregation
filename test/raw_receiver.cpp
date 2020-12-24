@@ -22,28 +22,16 @@ int main()
 
     std::cout << program << std::endl;
 
+    ip header;
     unsigned char buffer[1024];
     char text[32];
 
     while (true)
     {
-        const auto n = read(program.receiver(), buffer, sizeof(buffer));
-        const auto header = reinterpret_cast<ip *>(buffer);
-        if (header->ip_p != IPPROTO_MINE)
-            continue;
-
-        const auto common = reinterpret_cast<common_extra_t *>(buffer + sizeof(ip));
-        program.add_remote(common->host, common->connection.src_index, header->ip_src);
-
-        inet_ntop(AF_INET, &common->host, text, sizeof(text));
-        std::cout << *header << std::endl
-                  << text << '(' << common->connection.src_index << ") -> ";
-
-        address = program.address();
-        inet_ntop(AF_INET, &address, text, sizeof(text));
-        std::cout << text << '(' << common->connection.dst_index << ')' << std::endl
-                  << std::endl
-                  << program;
+        if (program.receive(&header, buffer, sizeof(buffer)))
+            std::cout << header << std::endl
+                      << std::endl
+                      << program;
     }
 
     return 0;

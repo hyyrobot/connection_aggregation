@@ -23,6 +23,7 @@ add_library(kernel
     src/program/program_t_remote.cpp
     src/program/program_t_access.cpp
     src/program/program_t_send.cpp
+    src/program/program_t_receive.cpp
 )
 
 find_package(Threads)
