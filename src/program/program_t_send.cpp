@@ -23,6 +23,7 @@ namespace autolabor::connection_aggregation
             .type{.forward = true},
             .protocol = header->ip_p,
             .offset = header->ip_off,
+            .src = _tun.address(),
             .dst = dst,
         };
         iovec iov[]{

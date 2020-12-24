@@ -42,8 +42,9 @@ int main()
                 continue;
             }
 
-            program.forward(address0, header, buffer + sizeof(ip), n - sizeof(header));
-            std::cout << program << std::endl;
+            std::cout << n << std::endl;
+            program.forward(address0, header, buffer + sizeof(ip), n - sizeof(ip));
+            // std::cout << program << std::endl;
         }
     }).detach();
 
