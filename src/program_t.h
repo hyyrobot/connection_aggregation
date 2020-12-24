@@ -36,8 +36,8 @@ namespace autolabor::connection_aggregation
     // 通用 ip 头附加信息
     struct common_extra_t
     {
-        in_addr host;
-        uint32_t src_index, dst_index;
+        in_addr host;                  // 虚拟网络中的源地址
+        uint32_t src_index, dst_index; // 本机网卡号、远程网卡号
     };
 
     struct nothing_t
@@ -47,9 +47,14 @@ namespace autolabor::connection_aggregation
 
     struct forward_t
     {
-        uint8_t type, protocol;
-        uint16_t offset;
-        in_addr src, dst;
+        uint8_t
+            type,     // 附加信息标识符
+            protocol; // 需要恢复到 ip 头的真实协议号
+        uint16_t
+            offset; // 需要恢复到 ip 头的真实段偏移
+        in_addr
+            src, // 虚拟网络中的源地址
+            dst; // 虚拟网络中的目的地址
     };
 
     struct program_t
@@ -95,7 +100,7 @@ namespace autolabor::connection_aggregation
         void device_removed(uint32_t);
 
         // 发送单个包
-        size_t send_single(in_addr, connection_key_union::key_t, const iovec *, size_t);
+        size_t send_single(in_addr, connection_key_t, const iovec *, size_t);
 
         // 接收二层套接字
         fd_guard_t _receiver;

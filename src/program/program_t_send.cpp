@@ -24,7 +24,7 @@ namespace autolabor::connection_aggregation
         }
         // 构造协议
         const forward_t extra{
-            .type = 1,
+            .type = 16,
             .protocol = header->ip_p,
             .offset = header->ip_off,
             .dst = dst,
