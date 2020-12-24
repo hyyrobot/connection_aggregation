@@ -28,7 +28,7 @@ int main()
     key.src_index = key.dst_index = 2;
     while (true)
     {
-        std::cout << program.send_single(nullptr, 0, address0, key.key) << std::endl;
+        std::cout << program.send_single(address0, key.key, nullptr, 0) << std::endl;
 
         std::this_thread::sleep_for(.5s);
     }

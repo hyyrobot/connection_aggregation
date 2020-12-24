@@ -21,7 +21,8 @@ namespace autolabor::connection_aggregation
             uint32_t id[2], dt;
         };
 
-        uint16_t next_id();
+        uint16_t get_id();
+        uint16_t next_id() const;
 
         constexpr static size_t sync_size = sizeof(ip) + sizeof(sync_pack_t);
         connection_info_t();

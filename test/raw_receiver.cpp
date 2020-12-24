@@ -14,7 +14,7 @@ int main()
     using namespace autolabor::connection_aggregation;
 
     in_addr address;
-    inet_pton(AF_INET, "10.0.0.1", &address);
+    inet_pton(AF_INET, "10.0.0.2", &address);
     program_t program("user", address);
 
     using namespace std::chrono_literals;
@@ -37,7 +37,11 @@ int main()
 
         inet_ntop(AF_INET, &common->host, text, sizeof(text));
         std::cout << *header << std::endl
-                  << text << '(' << common->connection.src_index << ") -> " << common->connection.dst_index << std::endl
+                  << text << '(' << common->connection.src_index << ") -> ";
+
+        address = program.address();
+        inet_ntop(AF_INET, &address, text, sizeof(text));
+        std::cout << text << '(' << common->connection.dst_index << ')' << std::endl
                   << std::endl
                   << program;
     }

@@ -4,6 +4,16 @@
 
 namespace autolabor::connection_aggregation
 {
+    const char *program_t::name() const
+    {
+        return _tun.name();
+    }
+
+    in_addr program_t::address() const
+    {
+        return _tun.address();
+    }
+
     std::ostream &operator<<(std::ostream &out, const program_t &program)
     {
         // tun
@@ -45,10 +55,10 @@ namespace autolabor::connection_aggregation
             {
                 inet_ntop(AF_INET, &a, text, sizeof(text));
                 out << "  - " << text << ':' << std::endl;
-                for (const auto &[key, _] : d)
+                for (const auto &[key, info] : d)
                 {
                     connection_key_union x{.key = key};
-                    out << "    - " << x.src_index << " -> " << x.dst_index << " : ..." << std::endl;
+                    out << "    - " << x.src_index << " -> " << x.dst_index << " : " << info.next_id() << std::endl;
                 }
             }
         }

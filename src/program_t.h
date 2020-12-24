@@ -14,6 +14,7 @@
 
 namespace autolabor::connection_aggregation
 {
+    // 我的第 3.5 层协议
     constexpr uint8_t IPPROTO_MINE = 3;
 
     // 连接表示法
@@ -29,6 +30,9 @@ namespace autolabor::connection_aggregation
         };
     };
 
+    // 用一个整型作为索引以免手工实现 hash
+    using connection_key_t = connection_key_union::key_t;
+
     // 通用 ip 头附加信息
     struct common_extra_t
     {
@@ -40,11 +44,14 @@ namespace autolabor::connection_aggregation
     {
         program_t(const char *, in_addr);
 
-        // 发现新的远程网卡
+        // 创建新的远程网卡
         bool add_remote(in_addr, uint32_t, in_addr);
 
+        const char *name() const;
+        in_addr address() const;
+
         // private:
-        size_t send_single(uint8_t *, uint16_t, in_addr, uint64_t);
+        size_t send_single(in_addr, connection_key_union::key_t, const iovec *, size_t);
 
         inline int receiver() const
         {
@@ -87,9 +94,6 @@ namespace autolabor::connection_aggregation
         // - 来源：远程数据包接收
         std::unordered_map<in_addr_t, std::unordered_map<uint32_t, in_addr>>
             _remotes;
-
-        // 用一个整型作为索引以免手工实现 hash
-        using connection_key_t = connection_key_union::key_t;
 
         // 连接信息用连接表示索引
         using connection_map_t = std::unordered_map<connection_key_t, connection_info_t>;
