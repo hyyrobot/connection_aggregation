@@ -26,6 +26,10 @@ namespace autolabor::connection_aggregation
             return 0;
 
         add_remote(common.host, common.src_index, header->ip_src);
+        {
+            READ_GRAUD(_connection_mutex);
+            _connections[common.host.s_addr][common.src_index].received_once(*buffer);
+        }
 
         char text[32];
         inet_ntop(AF_INET, &common.host, text, sizeof(text));

@@ -357,23 +357,60 @@ size_t send_single(in_addr, connection_key_t, const iovec *, size_t);
 
 ### 非通用附加信息
 
-ip 首部之后的第一个字节确定其后还有什么添加的信息。对于一个转发包，结构是这样的：
+ip 首部之后的第一个字节确定其后还有什么添加的信息。
+文件 `src/protocol.h` 内容如下：
 
 ```c++
+#include <netinet/in.h>
+
+struct pack_type_t
+{
+    uint8_t state : 2; // 状态
+    bool forward : 1;  // 转发包
+    uint8_t zero : 5;  // 空
+};
+
+struct nothing_t
+{
+    uint8_t zero[4];
+};
+
 struct forward_t
 {
-    uint8_t
-        type,     // 附加信息标识符
-        protocol; // 需要恢复到 ip 头的真实协议号
-    uint16_t
-        offset; // 需要恢复到 ip 头的真实段偏移
+    pack_type_t type; // 包类型和连接状态信息
+    uint8_t protocol; // 需要恢复到 ip 头的真实协议号
+    uint16_t offset;  // 需要恢复到 ip 头的真实段偏移
     in_addr
         src, // 虚拟网络中的源地址
         dst; // 虚拟网络中的目的地址
 };
 ```
 
-`type` 对于这个结构来说是个常数，暂定为 16。`protocol` 和 `offset` 直接来自被转发的 ip 首部。
+`pack_type_t` 中状态用于握手，转发包表示这个包的负载来自 tun。
+握手不区分客户或服务器，规则是：
+
+```c++
+if (_state < 2)
+{
+    union
+    {
+        uint8_t byte;
+        pack_type_t x;
+    } convertor{.byte = type};
+    _state = convertor.x.state + 1;
+}
+```
+
+也就是说，状态包括 0、1、2，连接一端的状态是收到对方发的包中状态 + 1。
+这个规则类似 TCP 但不严格，因为这个网络并不保证到达。各个状态的含义是：
+
+| 状态 | 含义
+| :-: | :-
+| 0 | 我知道我能发出。
+| 1 | 我知道我能接收，对端能发出。
+| 2 | 我知道对端能接收，即，在这个状态双方都能收发。
+
+转发包使用 `forward_t` 附加。其中，`protocol` 和 `offset` 直接来自被转发的 ip 首部。
 `offset` 实际上只能是 0。发送端是否分段是可以控制的，没有必要分段，而如果在传输过程中发生重新分段，恢复是困难的。
 首部中的源地址、目的地址填写了真实网络中的地址，因此需要在虚拟网络中路由的转发包，需要再记录 `src` 和 `dst`。
 
@@ -383,3 +420,4 @@ struct forward_t
 - 单连接上的收、发
 - 接收时更新远程网卡记录和并新建连接
 - 从 tun 描述符读取并修改首部后向网络转发
+- 收发时记录连接状态和部分统计信息

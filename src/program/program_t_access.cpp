@@ -58,7 +58,8 @@ namespace autolabor::connection_aggregation
                 for (const auto &[key, info] : d)
                 {
                     connection_key_union x{.key = key};
-                    out << "    - " << x.src_index << " -> " << x.dst_index << " : " << info.next_id() << std::endl;
+                    out << "    - " << x.src_index << " -> " << x.dst_index << " : " << std::endl
+                        << info << std::endl;
                 }
             }
         }
