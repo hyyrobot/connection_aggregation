@@ -18,10 +18,11 @@ add_library(kernel
     src/connection_info_t.cpp
 
     src/program_t.h
-    src/program_t_constructor.cpp
-    src/program_t_local.cpp
-    src/program_t_remote.cpp
-    src/program_t_access.cpp
+    src/program/program_t_constructor.cpp
+    src/program/program_t_local.cpp
+    src/program/program_t_remote.cpp
+    src/program/program_t_access.cpp
+    src/program/program_t_send.cpp
 )
 
 find_package(Threads)

@@ -35,6 +35,10 @@ namespace autolabor::connection_aggregation
     {
         return _index;
     }
+    in_addr tun_device_t::address() const
+    {
+        return _address;
+    }
 
     void register_tun(const fd_guard_t &fd, char *name)
     {

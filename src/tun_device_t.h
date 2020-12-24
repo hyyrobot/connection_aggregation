@@ -14,6 +14,7 @@ namespace autolabor::connection_aggregation
 
         const char *name() const;
         unsigned index() const;
+        in_addr address() const;
 
     private:
         fd_guard_t _tun;

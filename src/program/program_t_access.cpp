@@ -1,4 +1,4 @@
-#include "program_t.h"
+#include "../program_t.h"
 
 #include <arpa/inet.h>
 
@@ -47,7 +47,7 @@ namespace autolabor::connection_aggregation
                 out << "  - " << text << ':' << std::endl;
                 for (const auto &[key, _] : d)
                 {
-                    program_t::connection_key_union x{.key = key};
+                    connection_key_union x{.key = key};
                     out << "    - " << x.src_index << " -> " << x.dst_index << " : ..." << std::endl;
                 }
             }

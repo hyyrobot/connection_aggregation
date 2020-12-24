@@ -7,8 +7,6 @@
 #include <thread>
 #include <iostream>
 
-std::ostream &operator<<(std::ostream &, const ip &);
-
 int main()
 {
     using namespace autolabor::connection_aggregation;
@@ -24,14 +22,15 @@ int main()
     inet_pton(AF_INET, "192.168.18.186", &address1);
     program.add_remote(address0, 2, address1);
 
-    inet_pton(AF_INET, "10.0.0.2", &address0);
-    inet_pton(AF_INET, "8.8.8.8", &address1);
-    program.add_remote(address0, 4, address1);
-
     std::cout << program;
 
+    connection_key_union key;
+    key.src_index = key.dst_index = 2;
     while (true)
-        ;
+    {
+        program.send_single(nullptr, 0, address0, key.key);
 
+        std::this_thread::sleep_for(.5s);
+    }
     return 0;
 }

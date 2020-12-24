@@ -1,6 +1,7 @@
 #include "netinet/ip.h"
 
 #include <chrono>
+#include <atomic>
 
 namespace autolabor::connection_aggregation
 {
@@ -20,6 +21,8 @@ namespace autolabor::connection_aggregation
             uint32_t id[2], dt;
         };
 
+        uint16_t next_id();
+
         constexpr static size_t sync_size = sizeof(ip) + sizeof(sync_pack_t);
         connection_info_t();
 
@@ -27,6 +30,6 @@ namespace autolabor::connection_aggregation
         // 收报记录
         pack_in_t _pack_in[2];
         // 发送序号
-        uint32_t _out_id;
+        std::atomic<uint16_t> _out_id;
     };
 } // namespace autolabor::connection_aggregation

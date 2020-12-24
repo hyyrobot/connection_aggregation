@@ -14,11 +14,41 @@
 
 namespace autolabor::connection_aggregation
 {
+    constexpr uint8_t IPPROTO_MINE = 3;
+
+    struct common_extra_t
+    {
+        in_addr host;
+        enum class type_t : uint8_t
+        {
+            HAND_SHAKE
+        } type;
+        uint8_t zero[3];
+        uint64_t connection;
+    };
+
+    // 连接表示法
+    union connection_key_union
+    {
+        using key_t = uint64_t;
+        key_t key;
+        struct
+        {
+            uint32_t
+                src_index, // 本机网卡序号
+                dst_index; // 远程主机网卡序号
+        };
+    };
+
     struct program_t
     {
         program_t(const char *, in_addr);
 
+        // 发现新的远程网卡
         bool add_remote(in_addr, unsigned, in_addr);
+
+        // private:
+        size_t send_single(uint8_t *, size_t, in_addr, uint64_t);
 
         inline int receiver() const
         {
@@ -61,19 +91,6 @@ namespace autolabor::connection_aggregation
         // - 来源：远程数据包接收
         std::unordered_map<in_addr_t, std::unordered_map<unsigned, in_addr>>
             _remotes;
-
-        // 连接表示法
-        union connection_key_union
-        {
-            using key_t = uint64_t;
-            key_t key;
-            struct
-            {
-                uint32_t
-                    src_index, // 本机网卡序号
-                    dst_index; // 远程主机网卡序号
-            };
-        };
 
         // 用一个整型作为索引以免手工实现 hash
         using connection_key_t = connection_key_union::key_t;
