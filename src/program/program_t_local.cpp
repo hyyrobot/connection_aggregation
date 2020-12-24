@@ -105,7 +105,7 @@ namespace autolabor::connection_aggregation
         connection_key_union key{.src_index = index};
         for (const auto &[address, remote] : _remotes)
         {
-            auto &p = _connections[address];
+            auto &p = _connections.at(address);
             for (const auto &[remote_index, _] : remote)
             {
                 key.dst_index = remote_index;
@@ -142,7 +142,7 @@ namespace autolabor::connection_aggregation
         connection_key_union key{.src_index = index};
         for (const auto &[address, remote] : _remotes)
         {
-            auto &p = _connections[address];
+            auto &p = _connections.at(address);
             for (const auto &[remote_index, _] : remote)
             {
                 key.dst_index = remote_index;

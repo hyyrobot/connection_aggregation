@@ -1,6 +1,7 @@
 #include "../program_t.h"
 
 #include <arpa/inet.h>
+#include <vector>
 #include <iostream>
 
 namespace autolabor::connection_aggregation
@@ -25,11 +26,20 @@ namespace autolabor::connection_aggregation
         if (header->ip_p != IPPROTO_MINE)
             return 0;
 
+        std::vector<connection_key_t> connections;
         add_remote(common.host, common.src_index, header->ip_src);
         {
             READ_GRAUD(_connection_mutex);
-            _connections[common.host.s_addr][common.src_index].received_once(*buffer);
+            _connections
+                .at(common.host.s_addr)
+                .at(reinterpret_cast<connection_key_union *>(&common.src_index)->key)
+                .received_once(*buffer);
+            for (const auto &[key, info] : _connections.at(common.host.s_addr))
+                if (info.state() < 2)
+                    connections.push_back(key);
         }
+        for (auto key : connections)
+            send_handshake(common.host, key);
 
         char text[32];
         inet_ntop(AF_INET, &common.host, text, sizeof(text));

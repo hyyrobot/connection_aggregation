@@ -19,7 +19,7 @@ int main()
     std::this_thread::sleep_for(.1s);
 
     inet_pton(AF_INET, "10.0.0.2", &address0);
-    inet_pton(AF_INET, "192.168.18.191", &address1);
+    inet_pton(AF_INET, "192.168.100.2", &address1);
     program.add_remote(address0, 2, address1);
 
     std::cout << program;
@@ -56,7 +56,7 @@ int main()
     while (true)
     {
         std::cout << sendto(udp, "Hello", 6, 0, (sockaddr *)&remote, sizeof(remote)) << std::endl;
-        std::this_thread::sleep_for(.5s);
+        std::this_thread::sleep_for(50ms);
     }
 
     return 0;

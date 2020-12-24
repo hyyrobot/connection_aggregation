@@ -51,7 +51,7 @@ namespace autolabor::connection_aggregation
         in_addr address() const;
 
         // 发送基于连接的握手包
-        bool send_handshake(in_addr, connection_key_union::key_t);
+        bool send_handshake(in_addr, connection_key_t);
 
         // 向特定地址转发数据包
         size_t forward(in_addr, const ip *, const uint8_t *, size_t);
@@ -83,7 +83,13 @@ namespace autolabor::connection_aggregation
         void device_removed(uint32_t);
 
         // 发送单个包
-        bool send_single(in_addr, connection_key_t, const iovec *, size_t);
+        // 1. 目的地址
+        // 2. 通过连接
+        // 3. 要发送的分散内存块
+        //    **注意！这个数组的 [0] 需要留空，将会填入 ip 头！**
+        //    **注意！这个数组的 [1] 的第一个字节会被修改，不要加 const！**
+        // 4. 内存块数量，至少是 2
+        bool send_single(in_addr, connection_key_t, iovec *, size_t);
 
         // 接收二层套接字
         fd_guard_t _receiver;
