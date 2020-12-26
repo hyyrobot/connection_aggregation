@@ -34,7 +34,7 @@ uint16_t check_sum(const void *data, size_t n)
     for (; n > 1; n -= 2)
         sum += *p++;
 
-    if (n > 0)
+    if (n)
         sum += *p;
 
     p = reinterpret_cast<uint16_t *>(&sum);

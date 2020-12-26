@@ -2,12 +2,14 @@
 
 ## 目录
 
-- [20201209 对需求和技术的一些认识](#[20201209]-对需求和技术的一些认识)
-- [20201210 如何绑定网卡/确定实现方案](#[20201210]-如何绑定网卡/确定实现方案)
-- [20201214 在 VirtaulBox 中配置一个具有一定结构的网络进行测试](#[20201214]-在-VirtaulBox-中配置一个具有一定结构的网络进行测试)
-- [20201222 原来是这样](#[20201222]-原来是这样)
-- [20201223 实现连接监视、设计协议](#[20201223]-实现连接监视、设计协议)
-- [20201224 实现包收发、设计转发协议](#[20201224]-实现包收发、设计转发协议)
+- [20201209 周三 对需求和技术的一些认识](#[20201209]-对需求和技术的一些认识)
+- [20201210 周四 如何绑定网卡/确定实现方案](#[20201210]-如何绑定网卡/确定实现方案)
+- [20201214 周一 在 VirtaulBox 中配置一个具有一定结构的网络进行测试](#[20201214]-在-VirtaulBox-中配置一个具有一定结构的网络进行测试)
+  > 注意此处差了一周，这周写的代码已遗弃
+- [20201222 周二 原来是这样](#[20201222]-原来是这样)
+- [20201223 周三 实现连接监视、设计协议](#[20201223]-实现连接监视、设计协议)
+- [20201224 周四 实现包收发、设计转发协议](#[20201224]-实现包收发、设计转发协议)
+- [20201226 周六 使用 tun](#[20201226]-使用-tun)
 
 ## [20201209] 对需求和技术的一些认识
 
@@ -421,3 +423,123 @@ if (_state < 2)
 - 接收时更新远程网卡记录和并新建连接
 - 从 tun 描述符读取并修改首部后向网络转发
 - 收发时记录连接状态和部分统计信息
+
+## [20201226] 使用 tun
+
+### 资料
+
+之前对 tun 实验的太少，导致昨天卡了一天。新找到以下两篇有用的资料：
+
+- [tun 接受写入什么](https://www.junmajinlong.com/virtual/network/all_about_tun_tap/)
+
+  其中写道：
+  
+  > 用户空间的程序不可随意向虚拟网卡写入数据，因为写入虚拟网卡的这些数据都会被内核网络协议栈进行解封处理，就像来自物理网卡的数据都会被解封一样。
+  >
+  > 因此，如果用户空间程序要写 tun/tap 设备，所写入的数据需具有特殊结构：
+  >
+  > - 要么是已经封装了 PORT 的数据，即传输层的 tcp 数据段或 udp 数据报
+  > - 要么是已经封装了 IP+PORT 的数据，即 ip 层数据包
+  > - 要么是已经封装了 IP+PORT+MAC 的数据，即链路层数据帧
+  > - 要么是其它符合 tcp/ip 协议栈的数据，比如二层的 PPP 点对点数据，比如三层的 icmp 协议数据
+  
+  因此 tun 对于用户程序来说纯粹就是个字符驱动设备，不会对用户的数组做任何修改，填写字段和校验和都需要用户手工进行，而且还不支持 `send`、`recv`。
+  另外，亲测（而且显然）tun 并不支持不加 IP 头的报文。
+
+- [初始化 tun 的高级配置（转载）](https://blog.csdn.net/bailyzheng/article/details/18770121)
+
+  其中写道：
+
+  > 为了使用TUN/TAP设备，我们必须包含特定的头文件 linux/if_tun.h，如 12 行所示。在 21 行，我们打开了字符设备 /dev/net/tun。
+  > 接下来我们需要为 ioctl 的 TUNSETIFF 命令初始化一个结构体 ifr，一般的时候我们只需要关心其中的两个成员 ifr_name, ifr_flags。
+  > ifr_name 定义了要创建或者是打开的虚拟网络设备的名字，如果它为空或者是此网络设备不存在，内核将新建一个虚拟网络设备，并 返回新建的虚拟网络设备的名字，同时文件描述符 fd 也将和此网络设备建立起关联。
+  > 如果并没有指定网络设备的名字，内核将根据其类型自动选择 tunXX 和 tapXX 作为其名字。ifr_flags 用来描述网络设备的一些属性，比如说是点对点设备还是以太网设备。详细的选项解释如下:
+  > 
+  > - IFF_TUN: 创建一个点对点设备
+  > - IFF_TAP: 创建一个以太网设备
+  > - IFF_NO_PI: 不包含包信息，默认的每个数据包当传到用户空间时，都将包含一个附加的包头来保存包信息
+  > - IFF_ONE_QUEUE: 采用单一队列模式，即当数据包队列满的时候，由虚拟网络设备自已丢弃以后的数据包直到数据包队列再有空闲。
+  >
+  > 配置的时候，IFF_TUN 和 IFF_TAP 必须择一，其他选项则可任意组合。其中 IFF_NO_PI 没有开启时所附加的包信息头如下:
+  >
+  > ```c++
+  > struct tun_pi {
+  >   unsigned short flags;
+  >   unsigned short proto;
+  > };
+  > ```
+  > 
+  > 目前，flags 只在收取数据包的时候有效，当它的 TUN_PKT_STRIP 标志被置时，表示当前的用户空间缓冲区太小，以致数据包被截断。proto 成员表示发送/接收的数据包的协议。
+  > 
+  > 上面代码中的文件描述符 fd 除了支持 TUN_SETIFF 和其他的常规 ioctl 命令外，还支持以下命令:
+  > 
+  > - TUNSETNOCSUM: 不做校验和校验。参数为 int 型的 bool 值。
+  > - TUNSETPERSIST: 把对应网络设备设置成持续模式，默认的虚拟网络设备，当其相关的文件符被关闭时，也将会伴随着与之相关的路由等信息同时消失。如果设置成持续模式，那么它将会被保留供以后使用。参数为 int 型的 bool 值。
+  > - TUNSETOWNER: 设置网络设备的属主。参数类型为 uid_t。
+  > - TUNSETLINK: 设置网络设备的链路类型，此命令只有在虚拟网络设备关闭的情况下有效。参数为 int 型。
+  
+  以后强了可以不检验校验和。
+
+### 示例程序
+
+下面一段程序用于实现一个会回应 ping 的 tun：
+
+```c++
+uint8_t buffer[128]{};
+while (true)
+{
+    // 从 tun 读
+    auto n = read(tun, buffer, sizeof(buffer));
+    auto header = reinterpret_cast<ip *>(buffer);
+    // 只响应 ICMP
+    if (header->ip_p != IPPROTO_ICMP)
+        continue;
+    // 处理 IP 报头
+    // offset 字段只能是 0 或 64
+    // length 字段只能是网络字节序
+    // id 字段是任意的
+    // 字段的顺序不影响校验和
+    header->ip_id = 999;
+    fill_checksum(header);
+    // 处理 ICMP 报头
+    auto icmp_ = reinterpret_cast<icmp *>(buffer + sizeof(ip));
+    // 交换 IP 头中的地址，不影响 IP 校验和
+    std::swap(header->ip_src, header->ip_dst);
+    // 类型变为响应
+    icmp_->icmp_type = ICMP_ECHOREPLY;
+    // ICMP 包长度是 8 报头 + 56 报文
+    icmp_->icmp_cksum = 0;
+    icmp_->icmp_cksum = check_sum(icmp_, n - sizeof(ip));
+    // 写回 tun
+    std::cout << *header << std::endl;
+    write(tun, buffer, n);
+}
+```
+
+其中使用到计算校验和函数：
+
+```c++
+uint16_t check_sum(const void *data, size_t n)
+{
+    auto p = reinterpret_cast<const uint16_t *>(data);
+    uint32_t sum = 0;
+
+    for (; n > 1; n -= 2)
+        sum += *p++;
+
+    if (n)
+        sum += *p;
+
+    p = reinterpret_cast<uint16_t *>(&sum);
+    sum = p[0] + p[1];
+    sum = p[0] + p[1];
+
+    return ~p[0];
+}
+
+void fill_checksum(ip *data)
+{
+    data->ip_sum = 0;
+    data->ip_sum = check_sum(data, sizeof(ip));
+}
+```
