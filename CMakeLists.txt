@@ -4,7 +4,10 @@ set(CMAKE_CXX_STANDARD 20)
 
 include_directories(src)
 
-add_library(kernel 
+add_library(kernel
+    src/functions.h
+    src/functions.cpp
+
     src/fd_guard_t.h
     src/fd_guard_t.cpp
 
@@ -27,6 +30,9 @@ add_library(kernel
 )
 
 find_package(Threads)
+
+add_executable(test test/test.cpp)
+target_link_libraries(test kernel ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(send test/raw_sender.cpp)
 target_link_libraries(send kernel ${CMAKE_THREAD_LIBS_INIT})

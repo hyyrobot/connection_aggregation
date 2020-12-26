@@ -8,30 +8,6 @@
 #include <iostream>
 #include <cstring>
 
-std::ostream &operator<<(std::ostream &stream, const ip &ip_pack)
-{
-    stream << "=================" << std::endl
-           << "IP" << std::endl
-           << "=================" << std::endl
-           << "verson:          " << ip_pack.ip_v << std::endl
-           << "len_head:        " << ip_pack.ip_hl << std::endl
-           << "service type:    " << +ip_pack.ip_tos << std::endl
-           << "len_pack:        " << ip_pack.ip_len << std::endl
-           << "-----------------" << std::endl
-           << "id:              " << ip_pack.ip_id << std::endl
-           << "fragment type:   " << (ip_pack.ip_off >> 13) << std::endl
-           << "fragment offset: " << (ip_pack.ip_off & ~0xe000) << std::endl
-           << "ttl:             " << +ip_pack.ip_ttl << std::endl
-           << "protocol:        " << +ip_pack.ip_p << std::endl
-           << "check sum:       " << ip_pack.ip_sum << std::endl
-           << "-----------------" << std::endl;
-    char text[17];
-    inet_ntop(AF_INET, &ip_pack.ip_src, text, sizeof(text));
-    stream << "source:          " << text << std::endl;
-    inet_ntop(AF_INET, &ip_pack.ip_dst, text, sizeof(text));
-    return stream << "destination:     " << text;
-}
-
 namespace autolabor::connection_aggregation
 {
     size_t program_t::receive(ip *header, uint8_t *buffer, size_t size)
@@ -81,7 +57,7 @@ namespace autolabor::connection_aggregation
         if (reinterpret_cast<pack_type_t *>(buffer)->forward)
         {
             auto extra = reinterpret_cast<forward_t *>(buffer);
-            header->ip_hl = 5;
+            header->ip_hl = sizeof(ip) / 4;
             header->ip_len = ntohs(header->ip_len) - sizeof(common_extra_t) - sizeof(forward_t);
             header->ip_p = extra->protocol;
             header->ip_off = extra->offset;
