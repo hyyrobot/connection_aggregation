@@ -10,6 +10,7 @@
 - [20201223 周三 实现连接监视、设计协议](#[20201223]-实现连接监视、设计协议)
 - [20201224 周四 实现包收发、设计转发协议](#[20201224]-实现包收发、设计转发协议)
 - [20201226 周六 使用 tun](#[20201226]-使用-tun)
+- [20201227 周日 制造提供给 tun 的正确 udp 段](#[20201227]-制造提供给-tun-的正确-udp-段)
 
 ## [20201209] 对需求和技术的一些认识
 
@@ -519,7 +520,7 @@ while (true)
 其中使用到计算校验和函数：
 
 ```c++
-uint16_t check_sum(const void *data, size_t n)
+uint16_t checksum(const void *data, size_t n)
 {
     auto p = reinterpret_cast<const uint16_t *>(data);
     uint32_t sum = 0;
@@ -537,9 +538,75 @@ uint16_t check_sum(const void *data, size_t n)
     return ~p[0];
 }
 
-void fill_checksum(ip *data)
+void fill_checksum_ip(ip *data)
 {
-    data->ip_sum = 0;
-    data->ip_sum = check_sum(data, sizeof(ip));
+    data->ip_sum = checksum(data, sizeof(ip));
 }
 ```
+
+## [20201227] 制造提供给 tun 的正确 udp 段
+
+简单来说，所有 len 都是网络字节序。
+
+下面一段程序直接制造一个将字符串 `text` 封装到网络层的 udp 段并写入 tun：
+
+```c++
+uint8_t buffer[128];
+auto ip_ = reinterpret_cast<ip *>(buffer);
+auto udp_ip_ = reinterpret_cast<udp_ip_t *>(buffer + udp_ip_offset);
+auto udp_ = reinterpret_cast<udphdr *>(buffer + sizeof(ip));
+auto data = reinterpret_cast<char *>(buffer + sizeof(ip) + sizeof(udphdr));
+
+std::strcpy(data, text);
+auto udp_len = sizeof(udphdr) + std::strlen(text);
+// 填充 udp 首部
+udp_->source = 0;           // 源端口，可以为 0
+udp_->dest = 9999;          // 目的端口
+udp_->len = htons(udp_len); // 段长度 = 网络字节序(udp 头长度 + 数据长度)
+udp_->check = 0;            // 清零校验和段
+// 填充 udp 伪首部
+*udp_ip_ = {
+    .length = udp_->len,     // 再来一遍长度
+    .protocol = IPPROTO_UDP, // udp 协议号
+    .src = local,            // 源 ip 地址
+    .dst = address,          // 目的 ip 地址
+};
+fill_checksum_udp(udp_ip_);
+
+*ip_ = {
+    .ip_hl = 5,
+    .ip_v = 4,
+    .ip_len = htons(sizeof(ip) + udp_len),
+    .ip_ttl = 64,
+    .ip_p = IPPROTO_UDP,
+    .ip_src = local,
+    .ip_dst = address,
+};
+fill_checksum_ip(ip_);
+
+while (true)
+{
+    write(tun, buffer, sizeof(ip) + udp_len);
+    std::this_thread::sleep_for(1s);
+}
+```
+
+其中用到 udp 伪首部类型定义和填充 udp 校验和的函数：
+
+```c++
+struct udp_ip_t
+{
+    uint16_t length;
+    uint8_t zero, protocol;
+    in_addr src, dst;
+};
+
+constexpr size_t udp_ip_offset = sizeof(ip) - sizeof(udp_ip_t);
+
+void fill_checksum_udp(udp_ip_t *data)
+{
+    reinterpret_cast<udphdr *>(data + 1)->check = checksum(data, sizeof(udp_ip_t) + ntohs(data->length));
+}
+```
+
+此时监听 `address:9999` 就能收到 `text` 了。

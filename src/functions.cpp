@@ -26,7 +26,7 @@ std::ostream &operator<<(std::ostream &stream, const ip &ip_pack)
     return stream << "destination:     " << text;
 }
 
-uint16_t check_sum(const void *data, size_t n)
+uint16_t checksum(const void *data, size_t n)
 {
     auto p = reinterpret_cast<const uint16_t *>(data);
     uint32_t sum = 0;
@@ -44,8 +44,12 @@ uint16_t check_sum(const void *data, size_t n)
     return ~p[0];
 }
 
-void fill_checksum(ip *data)
+void fill_checksum_ip(ip *data)
 {
-    data->ip_sum = 0;
-    data->ip_sum = check_sum(data, sizeof(ip));
+    data->ip_sum = checksum(data, sizeof(ip));
+}
+
+void fill_checksum_udp(udp_ip_t *data)
+{
+    reinterpret_cast<udphdr *>(data + 1)->check = checksum(data, sizeof(udp_ip_t) + ntohs(data->length));
 }
