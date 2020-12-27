@@ -26,7 +26,10 @@ int main()
         ip header;
         unsigned char buffer[1024];
         while (true)
-            program.receive(&header, buffer, sizeof(buffer));
+        {
+            if (program.receive(&header, buffer, sizeof(buffer)))
+                std::cout << program << std::endl;
+        }
     }).detach();
 
     unsigned char buffer[1024];

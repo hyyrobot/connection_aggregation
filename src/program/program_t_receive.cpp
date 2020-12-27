@@ -29,16 +29,22 @@ namespace autolabor::connection_aggregation
         // 接收
         const auto n = recvmsg(_receiver, &msg, 0);
         if (header->ip_p != IPPROTO_MINE)
+        {
+            // std::cout << +header->ip_p << std::endl;
             return 0;
+        }
         // 创建连接
         add_remote(common.host, common.src_index, header->ip_src);
         // 即时回应
         std::vector<connection_key_t> connections;
         {
             READ_GRAUD(_connection_mutex);
+            connection_key_union reverse;
+            reverse.src_index = common.dst_index;
+            reverse.dst_index = common.src_index;
             _connections
                 .at(common.host.s_addr)
-                .at(reinterpret_cast<connection_key_union *>(&common.src_index)->key)
+                .at(reverse.key)
                 .received_once(*buffer);
             for (const auto &[key, info] : _connections.at(common.host.s_addr))
                 if (info.state() < 2)
@@ -46,31 +52,6 @@ namespace autolabor::connection_aggregation
         }
         for (auto key : connections)
             send_handshake(common.host, key);
-        // 显示（临时）
-        // char text[32];
-        // inet_ntop(AF_INET, &common.host, text, sizeof(text));
-        // std::cout << text << '(' << common.src_index << ") -> ";
-
-        // auto address = _tun.address();
-        // inet_ntop(AF_INET, &address, text, sizeof(text));
-        // std::cout << text << '(' << common.dst_index << ')' << std::endl;
-        if (reinterpret_cast<pack_type_t *>(buffer)->forward)
-        {
-            auto extra = reinterpret_cast<forward_t *>(buffer);
-            header->ip_hl = sizeof(ip) / 4;
-            header->ip_len = ntohs(header->ip_len) - sizeof(common_extra_t) - sizeof(forward_t);
-            header->ip_p = extra->protocol;
-            header->ip_off = extra->offset;
-            header->ip_src = extra->src;
-            header->ip_dst = extra->dst;
-
-            std::vector<uint8_t> temp(header->ip_len);
-            header->ip_len = htons(header->ip_len);
-            *reinterpret_cast<ip *>(temp.data()) = *header;
-            std::copy(buffer + sizeof(extra), buffer + temp.size() - sizeof(ip), temp.begin() + sizeof(ip));
-            // std::cout << *header << std::endl;
-            std::cout << write(_tun.socket(), temp.data(), temp.size()) << std::endl;
-        }
         // 返回 buffer 中有用的长度
         return n - sizeof(ip) - sizeof(common);
     }

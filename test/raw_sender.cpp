@@ -10,19 +10,28 @@
 int main()
 {
     using namespace autolabor::connection_aggregation;
+    using namespace std::chrono_literals;
 
     in_addr address0, address1;
     inet_pton(AF_INET, "10.0.0.1", &address0);
     program_t program("user", address0);
 
-    using namespace std::chrono_literals;
     std::this_thread::sleep_for(.1s);
 
     inet_pton(AF_INET, "10.0.0.2", &address0);
     inet_pton(AF_INET, "192.168.100.2", &address1);
     program.add_remote(address0, 2, address1);
+    program.send_handshake(address0);
 
+    std::this_thread::sleep_for(.2s);
     std::cout << program;
+
+    std::thread([&program] {
+        ip header;
+        unsigned char buffer[1024];
+        while (true)
+            program.receive(&header, buffer, sizeof(buffer));
+    }).detach();
 
     std::thread([&program, address0] {
         uint8_t buffer[2048];
@@ -57,7 +66,7 @@ int main()
     while (true)
     {
         std::cout << sendto(udp, "Hello", 6, 0, (sockaddr *)&remote, sizeof(remote)) << std::endl;
-        std::this_thread::sleep_for(50ms);
+        std::this_thread::sleep_for(1s);
     }
 
     return 0;

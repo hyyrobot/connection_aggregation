@@ -11,13 +11,24 @@ namespace autolabor::connection_aggregation
     {
         nothing_t nothing{}; // `send_single` 会修改这块内存，不可以 const
         iovec iov[]{{}, {.iov_base = (void *)&nothing, .iov_len = sizeof(nothing)}};
-        return send_single(dst, key, iov, sizeof(iov) / sizeof(iovec));
+        if (key)
+            return send_single(dst, key, iov, sizeof(iov) / sizeof(iovec));
+        else
+        {
+            std::vector<connection_key_t> v;
+            { // 读取所有连接
+                READ_GRAUD(_connection_mutex);
+                for (const auto &[k, c] : _connections.at(dst.s_addr))
+                    if (c.state() < 2)
+                        v.push_back(k);
+            }
+            return std::count_if(v.begin(), v.end(), [&](auto k) { return send_single(dst, k, iov, sizeof(iov) / sizeof(iovec)); }) == v.size();
+        }
     }
 
     size_t program_t::forward(in_addr dst, const ip *header, const uint8_t *buffer, size_t size)
     {
         constexpr static auto size_except_payload = sizeof(ip) + sizeof(common_extra_t) + sizeof(forward_t);
-        std::vector<connection_key_t> connections;
         // 构造协议
         const forward_t extra{
             .type{.forward = true},
@@ -31,17 +42,15 @@ namespace autolabor::connection_aggregation
             {.iov_base = (void *)&extra, .iov_len = sizeof(extra)},
             {.iov_base = (void *)buffer, .iov_len = size},
         };
+        std::vector<connection_key_t> v;
         { // 读取所有可用的连接
             READ_GRAUD(_connection_mutex);
-            for (const auto &[key, _] : _connections.at(dst.s_addr))
-                connections.push_back(key);
+            for (const auto &[k, c] : _connections.at(dst.s_addr))
+                if (c.state() > 0)
+                    v.push_back(k);
         }
         // 发送
-        size_t result = 0;
-        for (auto key : connections)
-            if (send_single(dst, key, iov, sizeof(iov) / sizeof(iovec)))
-                ++result;
-        return result;
+        return std::count_if(v.begin(), v.end(), [&](auto k) { return send_single(dst, k, iov, sizeof(iov) / sizeof(iovec)); });
     }
 
     bool program_t::send_single(in_addr dst, connection_key_t key, iovec *iov, size_t count)

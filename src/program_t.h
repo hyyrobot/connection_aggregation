@@ -51,7 +51,7 @@ namespace autolabor::connection_aggregation
         in_addr address() const;
 
         // 发送基于连接的握手包
-        bool send_handshake(in_addr, connection_key_t);
+        bool send_handshake(in_addr, connection_key_t = 0);
 
         // 向特定地址转发数据包
         size_t forward(in_addr, const ip *, const uint8_t *, size_t);
