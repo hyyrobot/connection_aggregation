@@ -29,7 +29,8 @@ int main()
     std::thread([&program] {
         unsigned char buffer[1024];
         while (true)
-            program.receive(buffer, sizeof(buffer));
+            if (program.receive(buffer, sizeof(buffer)))
+                std::cout << program << std::endl;
     }).detach();
 
     std::thread([&program, address0] {
@@ -53,7 +54,7 @@ int main()
                 break;
             }
             if (forward)
-                std::cout << program.forward(address0, buffer, n) << std::endl;
+                program.forward(address0, buffer, n);
         }
     }).detach();
 

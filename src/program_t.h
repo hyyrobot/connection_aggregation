@@ -3,7 +3,7 @@
 
 #include "net_device_t.h"
 #include "tun_device_t.h"
-#include "connection_info_t.h"
+#include "connection.h"
 
 #include <unordered_map>
 #include <shared_mutex>
@@ -16,29 +16,6 @@ namespace autolabor::connection_aggregation
 {
     // 我的第 3.5 层协议
     constexpr uint8_t IPPROTO_MINE = 4;
-
-    // 连接表示法
-    union connection_key_union
-    {
-        using key_t = uint64_t;
-        key_t key;
-        struct
-        {
-            uint32_t
-                src_index, // 本机网卡序号
-                dst_index; // 远程主机网卡序号
-        };
-    };
-
-    // 用一个整型作为索引以免手工实现 hash
-    using connection_key_t = connection_key_union::key_t;
-
-    // 通用 ip 头附加信息
-    struct common_extra_t
-    {
-        in_addr host;                  // 虚拟网络中的源地址
-        uint32_t src_index, dst_index; // 本机网卡号、远程网卡号
-    };
 
     struct program_t
     {
@@ -109,13 +86,10 @@ namespace autolabor::connection_aggregation
         std::unordered_map<in_addr_t, std::unordered_map<uint32_t, in_addr>>
             _remotes;
 
-        // 连接信息用连接表示索引
-        using connection_map_t = std::unordered_map<connection_key_t, connection_info_t>;
-
         // 连接表
         // - 用远程主机地址索引方便发送时构造连接束
         // - 来源：本地网卡表和远程网卡表的笛卡尔积
-        std::unordered_map<in_addr_t, connection_map_t>
+        std::unordered_map<in_addr_t, connection_srand_t>
             _connections;
     };
 

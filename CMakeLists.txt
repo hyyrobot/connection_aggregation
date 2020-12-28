@@ -17,8 +17,9 @@ add_library(kernel
     src/tun_device_t.h
     src/tun_device_t.cpp
     
-    src/connection_info_t.h
+    src/connection.h
     src/connection_info_t.cpp
+    src/connection_srand_t.cpp
 
     src/program_t.h
     src/program/program_t_constructor.cpp

@@ -16,14 +16,14 @@ namespace autolabor::connection_aggregation
             {.iov_base = (void *)&nothing, .iov_len = sizeof(nothing)},
         };
         constexpr static auto iov_len = sizeof(iov) / sizeof(iovec);
-        // 如果指定发送什么，直接发送
+        // 如果指定从哪里发送，直接发送
         if (key)
             return send_single(dst, key, iov, iov_len);
         // 否则向所有没完成握手的连接发送握手
         std::vector<connection_key_t> v;
         {
             READ_GRAUD(_connection_mutex);
-            for (const auto &[k, c] : _connections.at(dst.s_addr))
+            for (const auto &[k, c] : _connections.at(dst.s_addr).items)
                 if (c.state() < 2)
                     v.emplace_back(k);
         }
@@ -33,7 +33,7 @@ namespace autolabor::connection_aggregation
     size_t program_t::forward(in_addr dst, const uint8_t *buffer, size_t size)
     {
         // `send_single` 会修改这块内存，不可以 const
-        extra_t extra{.type{.forward = true}};
+        extra_t extra{.forward = true};
         iovec iov[]{
             {},
             {.iov_base = (void *)&extra, .iov_len = sizeof(extra)},
@@ -45,7 +45,9 @@ namespace autolabor::connection_aggregation
         auto max = 0;
         {
             READ_GRAUD(_connection_mutex);
-            for (const auto &[k, c] : _connections.at(dst.s_addr))
+            auto &srand = _connections.at(dst.s_addr);
+            extra.id = srand.get_id();
+            for (const auto &[k, c] : srand.items)
             {
                 auto s = c.state();
                 if (s > max)
@@ -59,13 +61,13 @@ namespace autolabor::connection_aggregation
 
     bool program_t::send_single(in_addr dst, connection_key_t key, iovec *iov, size_t count)
     {
-        constexpr static uint16_t header_size = sizeof(ip) + sizeof(common_extra_t);
+        constexpr static uint16_t header_size = sizeof(ip) + sizeof(ip_extra_t);
         // 构造首部
         connection_key_union connection{.key = key};
         struct
         {
             ip basic;
-            common_extra_t extra;
+            ip_extra_t extra;
         } header{
             .basic{
                 .ip_hl = header_size / 4,
@@ -84,8 +86,8 @@ namespace autolabor::connection_aggregation
         };
         { // 填写基于连接的包序号
             READ_GRAUD(_connection_mutex);
-            auto &c = _connections.at(dst.s_addr).at(key);
-            reinterpret_cast<pack_type_t *>(iov[1].iov_base)->state = c.state();
+            auto &c = _connections.at(dst.s_addr).items.at(key);
+            reinterpret_cast<extra_t *>(iov[1].iov_base)->state = c.state();
             header.basic.ip_id = c.get_id();
         }
         // 填写物理网络中的目的地址
@@ -112,7 +114,7 @@ namespace autolabor::connection_aggregation
         if (header.basic.ip_len == d.send(&msg))
         {
             // 此处已经锁了 local，connection 移除需要先获得 local，所以此处不用上锁
-            _connections.at(dst.s_addr).at(key).sent_once();
+            _connections.at(dst.s_addr).items.at(key).sent_once();
             return true;
         }
         return false;

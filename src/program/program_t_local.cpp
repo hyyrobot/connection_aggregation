@@ -109,9 +109,9 @@ namespace autolabor::connection_aggregation
             for (const auto &[remote_index, _] : remote)
             {
                 key.dst_index = remote_index;
-                p.emplace(std::piecewise_construct,
-                          std::forward_as_tuple(key.key),
-                          std::forward_as_tuple());
+                p.items.emplace(std::piecewise_construct,
+                                std::forward_as_tuple(),
+                                std::forward_as_tuple());
             }
         }
     }
@@ -146,7 +146,7 @@ namespace autolabor::connection_aggregation
             for (const auto &[remote_index, _] : remote)
             {
                 key.dst_index = remote_index;
-                p.erase(key.key);
+                p.items.erase(key.key);
             }
         }
     }

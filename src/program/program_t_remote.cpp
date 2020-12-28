@@ -16,16 +16,18 @@ namespace autolabor::connection_aggregation
             }
         }
         // 修改连接表
-        READ_GRAUD(_local_mutex);
-        WRITE_GRAUD(_connection_mutex);
-        auto [p, _] = _connections.try_emplace(virtual_address.s_addr);
-        connection_key_union key{.dst_index = index};
-        for (const auto &[local_index, _] : _devices)
         {
-            key.src_index = local_index;
-            p->second.emplace(std::piecewise_construct,
-                              std::forward_as_tuple(key.key),
-                              std::forward_as_tuple());
+            READ_GRAUD(_local_mutex);
+            WRITE_GRAUD(_connection_mutex);
+            auto [p, _] = _connections.try_emplace(virtual_address.s_addr);
+            connection_key_union key{.dst_index = index};
+            for (const auto &[local_index, _] : _devices)
+            {
+                key.src_index = local_index;
+                p->second.items.emplace(std::piecewise_construct,
+                                        std::forward_as_tuple(key.key),
+                                        std::forward_as_tuple());
+            }
         }
         return true;
     }

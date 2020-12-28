@@ -1,5 +1,4 @@
-#include "connection_info_t.h"
-#include "protocol.h"
+#include "connection.h"
 
 namespace autolabor::connection_aggregation
 {
@@ -17,27 +16,15 @@ namespace autolabor::connection_aggregation
         return temp ? temp : ++_out_id;
     }
 
-    uint16_t connection_info_t::next_id() const
-    {
-        return _out_id;
-    }
-
     size_t connection_info_t::sent_once()
     {
         return ++_sent;
     }
 
-    size_t connection_info_t::received_once(uint8_t type)
+    size_t connection_info_t::received_once(extra_t extra)
     {
         if (_state < 2)
-        {
-            union
-            {
-                uint8_t byte;
-                pack_type_t x;
-            } convertor{.byte = type};
-            _state = convertor.x.state == 2 ? 2 : convertor.x.state + 1;
-        }
+            _state = extra.state == 2 ? 2 : extra.state + 1;
 
         return ++_received;
     }

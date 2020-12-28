@@ -55,7 +55,7 @@ namespace autolabor::connection_aggregation
             {
                 inet_ntop(AF_INET, &a, text, sizeof(text));
                 out << "  - " << text << ':' << std::endl;
-                for (const auto &[key, info] : d)
+                for (const auto &[key, info] : d.items)
                 {
                     connection_key_union x{.key = key};
                     out << "    - " << x.src_index << " -> " << x.dst_index << " : " << std::endl
