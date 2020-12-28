@@ -2,6 +2,8 @@
 #define CONNECTION_H
 
 #include <unordered_map>
+#include <list>
+
 #include <atomic>
 #include <ostream>
 #include <chrono>
@@ -65,7 +67,9 @@ namespace autolabor::connection_aggregation
         using stamp_t = std::chrono::steady_clock::time_point;
         constexpr static uint16_t ID_SIZE = 0x20'00;
         std::atomic_uint16_t _out_id;
-        stamp_t _received[ID_SIZE];
+
+        std::list<uint16_t> _received_id;
+        std::unordered_map<uint16_t, stamp_t> _received_time;
 
     public:
         connection_srand_t();

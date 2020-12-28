@@ -10,12 +10,11 @@ struct ip_extra_t
     uint32_t src_index, dst_index; // 本机网卡号、远程网卡号
 };
 
-// 包类型
 struct extra_t
 {
     uint8_t state : 2; // 状态
     bool forward : 1;  // 转发包
-    uint16_t id : 15;
+    uint16_t id : 13;  // 基于连接束的序号
 };
 
 #endif // PROTOCOL_H
