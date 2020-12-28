@@ -9,12 +9,16 @@ namespace autolabor::connection_aggregation
 {
     size_t program_t::send_handshake(in_addr dst, connection_key_t key)
     {
-        nothing_t nothing{}; // `send_single` 会修改这块内存，不可以 const
-        iovec iov[]{{}, {.iov_base = (void *)&nothing, .iov_len = sizeof(nothing)}};
+        // `send_single` 会修改这块内存，不可以 const
+        extra_t nothing{};
+        iovec iov[]{
+            {},
+            {.iov_base = (void *)&nothing, .iov_len = sizeof(nothing)},
+        };
         constexpr static auto iov_len = sizeof(iov) / sizeof(iovec);
         // 如果指定发送什么，直接发送
         if (key)
-            return send_single(dst, key, iov, sizeof(iov) / sizeof(iovec));
+            return send_single(dst, key, iov, iov_len);
         // 否则向所有没完成握手的连接发送握手
         std::vector<connection_key_t> v;
         {
@@ -26,17 +30,10 @@ namespace autolabor::connection_aggregation
         return std::count_if(v.begin(), v.end(), [&](auto k) { return send_single(dst, k, iov, iov_len); }) == v.size();
     }
 
-    size_t program_t::forward(in_addr dst, const ip *header, const uint8_t *buffer, size_t size)
+    size_t program_t::forward(in_addr dst, const uint8_t *buffer, size_t size)
     {
-        constexpr static auto size_except_payload = sizeof(ip) + sizeof(common_extra_t) + sizeof(forward_t);
-        // 构造协议
-        const forward_t extra{
-            .type{.forward = true},
-            .protocol = header->ip_p,
-            .offset = header->ip_off,
-            .src = _tun.address(),
-            .dst = dst,
-        };
+        // `send_single` 会修改这块内存，不可以 const
+        extra_t extra{.type{.forward = true}};
         iovec iov[]{
             {},
             {.iov_base = (void *)&extra, .iov_len = sizeof(extra)},

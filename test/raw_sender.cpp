@@ -27,10 +27,9 @@ int main()
     std::cout << program;
 
     std::thread([&program] {
-        ip header;
         unsigned char buffer[1024];
         while (true)
-            program.receive(&header, buffer, sizeof(buffer));
+            program.receive(buffer, sizeof(buffer));
     }).detach();
 
     std::thread([&program, address0] {
@@ -44,15 +43,17 @@ int main()
                 continue;
             }
 
-            auto header = reinterpret_cast<const ip *>(buffer);
-            if (header->ip_p != IPPROTO_UDP)
+            auto forward = false;
+            switch (reinterpret_cast<const ip *>(buffer)->ip_p)
             {
-                std::cout << "p = " << +header->ip_p << std::endl;
-                continue;
+            case IPPROTO_ICMP:
+            case IPPROTO_TCP:
+            case IPPROTO_UDP:
+                forward = true;
+                break;
             }
-
-            std::cout << program.forward(address0, header, buffer + sizeof(ip), n - sizeof(ip)) << std::endl;
-            // std::cout << program << std::endl;
+            if (forward)
+                std::cout << program.forward(address0, buffer, n) << std::endl;
         }
     }).detach();
 

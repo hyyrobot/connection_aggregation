@@ -23,11 +23,10 @@ int main()
     char text[32];
 
     std::thread([&program] {
-        ip header;
         unsigned char buffer[1024];
         while (true)
         {
-            if (program.receive(&header, buffer, sizeof(buffer)))
+            if (program.receive(buffer, sizeof(buffer)))
                 std::cout << program << std::endl;
         }
     }).detach();

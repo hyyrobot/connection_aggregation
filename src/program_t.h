@@ -15,7 +15,7 @@
 namespace autolabor::connection_aggregation
 {
     // 我的第 3.5 层协议
-    constexpr uint8_t IPPROTO_MINE = 3;
+    constexpr uint8_t IPPROTO_MINE = 4;
 
     // 连接表示法
     union connection_key_union
@@ -54,9 +54,9 @@ namespace autolabor::connection_aggregation
         size_t send_handshake(in_addr, connection_key_t = 0);
 
         // 向特定地址转发数据包
-        size_t forward(in_addr, const ip *, const uint8_t *, size_t);
+        size_t forward(in_addr, const uint8_t *, size_t);
 
-        size_t receive(ip *, uint8_t *, size_t);
+        size_t receive(uint8_t *, size_t);
 
         inline int tun() const
         {
