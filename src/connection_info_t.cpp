@@ -36,7 +36,7 @@ namespace autolabor::connection_aggregation
                 uint8_t byte;
                 pack_type_t x;
             } convertor{.byte = type};
-            _state = convertor.x.state + 1;
+            _state = convertor.x.state == 2 ? 2 : convertor.x.state + 1;
         }
 
         return ++_received;

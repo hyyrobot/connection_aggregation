@@ -7,23 +7,23 @@
 
 namespace autolabor::connection_aggregation
 {
-    bool program_t::send_handshake(in_addr dst, connection_key_t key)
+    size_t program_t::send_handshake(in_addr dst, connection_key_t key)
     {
         nothing_t nothing{}; // `send_single` 会修改这块内存，不可以 const
         iovec iov[]{{}, {.iov_base = (void *)&nothing, .iov_len = sizeof(nothing)}};
+        constexpr static auto iov_len = sizeof(iov) / sizeof(iovec);
+        // 如果指定发送什么，直接发送
         if (key)
             return send_single(dst, key, iov, sizeof(iov) / sizeof(iovec));
-        else
+        // 否则向所有没完成握手的连接发送握手
+        std::vector<connection_key_t> v;
         {
-            std::vector<connection_key_t> v;
-            { // 读取所有连接
-                READ_GRAUD(_connection_mutex);
-                for (const auto &[k, c] : _connections.at(dst.s_addr))
-                    if (c.state() < 2)
-                        v.push_back(k);
-            }
-            return std::count_if(v.begin(), v.end(), [&](auto k) { return send_single(dst, k, iov, sizeof(iov) / sizeof(iovec)); }) == v.size();
+            READ_GRAUD(_connection_mutex);
+            for (const auto &[k, c] : _connections.at(dst.s_addr))
+                if (c.state() < 2)
+                    v.emplace_back(k);
         }
+        return std::count_if(v.begin(), v.end(), [&](auto k) { return send_single(dst, k, iov, iov_len); }) == v.size();
     }
 
     size_t program_t::forward(in_addr dst, const ip *header, const uint8_t *buffer, size_t size)
@@ -42,15 +42,22 @@ namespace autolabor::connection_aggregation
             {.iov_base = (void *)&extra, .iov_len = sizeof(extra)},
             {.iov_base = (void *)buffer, .iov_len = size},
         };
-        std::vector<connection_key_t> v;
-        { // 读取所有可用的连接
+        constexpr static auto iov_len = sizeof(iov) / sizeof(iovec);
+        // 检查所有连接，只通过最好的连接转发
+        std::vector<connection_key_t> v[3];
+        auto max = 0;
+        {
             READ_GRAUD(_connection_mutex);
             for (const auto &[k, c] : _connections.at(dst.s_addr))
-                if (c.state() > 0)
-                    v.push_back(k);
+            {
+                auto s = c.state();
+                if (s > max)
+                    v[max = s].push_back(k);
+                else if (s == max)
+                    v[s].push_back(k);
+            }
         }
-        // 发送
-        return std::count_if(v.begin(), v.end(), [&](auto k) { return send_single(dst, k, iov, sizeof(iov) / sizeof(iovec)); });
+        return std::count_if(v[max].begin(), v[max].end(), [&](auto k) { return send_single(dst, k, iov, iov_len); });
     }
 
     bool program_t::send_single(in_addr dst, connection_key_t key, iovec *iov, size_t count)
