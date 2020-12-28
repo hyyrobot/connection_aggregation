@@ -23,8 +23,9 @@ namespace autolabor::connection_aggregation
 
     size_t connection_info_t::received_once(extra_t extra)
     {
-        if (_state < 2)
-            _state = extra.state == 2 ? 2 : extra.state + 1;
+        auto s = _state.load();
+        while (s < 2 && !_state.compare_exchange_strong(s, extra.state + 1))
+            ;
 
         return ++_received;
     }

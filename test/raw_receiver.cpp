@@ -25,10 +25,7 @@ int main()
     std::thread([&program] {
         unsigned char buffer[1024];
         while (true)
-        {
-            if (program.receive(buffer, sizeof(buffer)))
-                std::cout << program << std::endl;
-        }
+            program.receive(buffer, sizeof(buffer));
     }).detach();
 
     unsigned char buffer[1024];

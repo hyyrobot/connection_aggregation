@@ -44,9 +44,10 @@ namespace autolabor::connection_aggregation
 
     private:
         mutable std::shared_mutex
-            _local_mutex,      // 访问本机网卡表
-            _remote_mutex,     // 访问远程网卡表
-            _connection_mutex; // 访问连接表
+            // 这些锁用于保护集合第一层的结构，不改变集合结构的应该共享锁
+            _local_mutex,      // 保护本机网卡表
+            _remote_mutex,     // 保护远程网卡表
+            _connection_mutex; // 保护连接表
 
         // rtnetlink 套接字
         fd_guard_t _netlink;

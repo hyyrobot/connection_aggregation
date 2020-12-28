@@ -42,15 +42,12 @@ namespace autolabor::connection_aggregation
         auto upload = false;
         {
             READ_GRAUD(_connection_mutex);
-            auto &info = _connections.at(common.host.s_addr);
-            info.items.at(reverse.key).received_once(*extra);
+            auto &srand = _connections.at(common.host.s_addr);
+            srand.items.at(reverse.key).received_once(*extra);
             if (extra->forward)
             {
-                std::cout << extra->id << std::endl;
-                using namespace std::chrono_literals;
                 auto now = std::chrono::steady_clock::now();
-                if (upload = now - info.received[extra->id] > 500ms)
-                    info.received[extra->id] = now;
+                upload = srand.update_time_stamp(extra->id, now);
             }
         }
         // 即时回应
