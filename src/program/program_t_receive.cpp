@@ -15,7 +15,6 @@ namespace autolabor::connection_aggregation
     {
         // 构造接收结构
         sockaddr_in remote{.sin_family = AF_INET};
-        ip header;
         ip_extra_t common;
         extra_t extra;
         iovec iov[]{
@@ -32,7 +31,7 @@ namespace autolabor::connection_aggregation
         // 接收
         const auto n = recvmsg(_receiver, &msg, 0);
         // 创建连接
-        add_remote(common.host, common.src_index, header.ip_src);
+        add_remote(common.host, common.src_index, remote.sin_addr);
         // 交换源序号和目的序号获得本地连接键
         connection_key_union reverse;
         reverse.src_index = common.dst_index;
