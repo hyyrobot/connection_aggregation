@@ -12,6 +12,12 @@
 
 namespace autolabor::connection_aggregation
 {
+    // 我的第 3.5 层协议
+    constexpr uint8_t IPPROTO_MINE = IPPROTO_IPIP;
+
+    // 网卡序号类型
+    using net_index_t = uint16_t;
+
     /** 
      * 连接附加信息
      * 这个结构体无锁线程安全
@@ -66,11 +72,13 @@ namespace autolabor::connection_aggregation
     {
         using stamp_t = std::chrono::steady_clock::time_point;
         constexpr static uint16_t ID_SIZE = 0x20'00;
-        std::atomic_uint16_t _out_id;
 
+        // 发
+        std::atomic_uint16_t _out_id;
+        // 收
         std::list<uint16_t> _received_id;
         std::unordered_map<uint16_t, stamp_t> _received_time;
-
+        
     public:
         connection_srand_t();
 

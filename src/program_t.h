@@ -14,15 +14,12 @@
 
 namespace autolabor::connection_aggregation
 {
-    // 我的第 3.5 层协议
-    constexpr uint8_t IPPROTO_MINE = 4;
-
-    struct program_t
+      struct program_t
     {
         program_t(const char *, in_addr);
 
         // 创建新的远程网卡
-        bool add_remote(in_addr, uint32_t, in_addr);
+        bool add_remote(in_addr, net_index_t, in_addr);
 
         const char *name() const;
         in_addr address() const;
@@ -54,11 +51,11 @@ namespace autolabor::connection_aggregation
         // 监视本地网络变化
         void local_monitor();
         // 发现新的地址或网卡
-        void address_added(uint32_t, const char *, in_addr = {});
+        void address_added(net_index_t, const char *, in_addr = {});
         // 移除地址
-        void address_removed(uint32_t, in_addr);
+        void address_removed(net_index_t, in_addr);
         // 移除网卡
-        void device_removed(uint32_t);
+        void device_removed(net_index_t);
 
         // 发送单个包
         // 1. 目的地址
@@ -78,13 +75,13 @@ namespace autolabor::connection_aggregation
         // 本地网卡表
         // - 用网卡序号索引
         // - 来源：本地网络监测
-        std::unordered_map<uint32_t, net_device_t>
+        std::unordered_map<net_index_t, net_device_t>
             _devices;
 
         // 远程网卡表
         // - 用远程主机地址和网卡序号索引
         // - 来源：远程数据包接收
-        std::unordered_map<in_addr_t, std::unordered_map<uint32_t, in_addr>>
+        std::unordered_map<in_addr_t, std::unordered_map<net_index_t, in_addr>>
             _remotes;
 
         // 连接表

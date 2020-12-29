@@ -2,7 +2,7 @@
 
 namespace autolabor::connection_aggregation
 {
-    bool program_t::add_remote(in_addr virtual_address, unsigned index, in_addr real_address)
+    bool program_t::add_remote(in_addr virtual_address, net_index_t index, in_addr real_address)
     {
         { // 修改远程网卡表
             WRITE_GRAUD(_remote_mutex);

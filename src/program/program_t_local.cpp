@@ -90,7 +90,7 @@ namespace autolabor::connection_aggregation
         }
     }
 
-    void program_t::address_added(unsigned index, const char *name, in_addr address)
+    void program_t::address_added(net_index_t index, const char *name, in_addr address)
     {
         { // 修改本机网卡表
             WRITE_GRAUD(_local_mutex);
@@ -116,7 +116,7 @@ namespace autolabor::connection_aggregation
         }
     }
 
-    void program_t::address_removed(unsigned index, in_addr address)
+    void program_t::address_removed(net_index_t index, in_addr address)
     {
         // 修改本机网卡表
         // 即使没有 ip 地址的网卡也可以用于发送
@@ -126,7 +126,7 @@ namespace autolabor::connection_aggregation
             p->second.erase_address(address);
     }
 
-    void program_t::device_removed(unsigned index)
+    void program_t::device_removed(net_index_t index)
     {
         {
             WRITE_GRAUD(_local_mutex);
