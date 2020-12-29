@@ -19,7 +19,8 @@ int main()
     std::this_thread::sleep_for(.1s);
 
     inet_pton(AF_INET, "10.0.0.2", &address0);
-    inet_pton(AF_INET, "188.131.141.243", &address1);
+    // inet_pton(AF_INET, "188.131.141.243", &address1);
+    inet_pton(AF_INET, "192.168.18.204", &address1);
     program.add_remote(address0, 2, address1);
     program.send_handshake(address0);
 
@@ -29,10 +30,8 @@ int main()
     std::thread([&program] {
         unsigned char buffer[1024];
         while (true)
-        {
-            program.receive(buffer, sizeof(buffer));
-            std::cout << program << std::endl;
-        }
+            if (program.receive(buffer, sizeof(buffer)))
+                std::cout << program << std::endl;
     }).detach();
 
     std::thread([&program, address0] {

@@ -77,6 +77,11 @@ namespace autolabor::connection_aggregation
             .sin_addr = _remotes.at(dst.s_addr).at(connection.dst_index),
         };
         iov[0] = {.iov_base = &extra, .iov_len = sizeof(extra)};
+        { // 填写基于连接的包序号
+            READ_GRAUD(_connection_mutex);
+            reinterpret_cast<extra_t *>(iov[1].iov_base)->state =
+                _connections.at(dst.s_addr).items.at(key).state();
+        }
         msghdr msg{
             .msg_name = &remote,
             .msg_namelen = sizeof(remote),

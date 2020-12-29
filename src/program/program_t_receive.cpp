@@ -32,6 +32,7 @@ namespace autolabor::connection_aggregation
         const auto n = recvmsg(_receiver, &msg, 0);
         // 创建连接
         add_remote(common.host, common.src_index, remote.sin_addr);
+        std::cout << *this << std::endl;
         // 交换源序号和目的序号获得本地连接键
         connection_key_union reverse;
         reverse.src_index = common.dst_index;
