@@ -8,10 +8,8 @@ namespace autolabor::connection_aggregation
     constexpr static auto on = 1;
 
     net_device_t::net_device_t(const char *name)
-        : _socket(socket(AF_INET, SOCK_RAW, SOCK_RAW))
+        : _socket(socket(AF_INET, SOCK_DGRAM, 0))
     {
-        // 指定协议栈不再向发出的分组添加 ip 头
-        setsockopt(_socket, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on));
         // 绑定套接字到网卡
         setsockopt(_socket, SOL_SOCKET, SO_BINDTODEVICE, name, std::strlen(name));
 

@@ -64,43 +64,19 @@ namespace autolabor::connection_aggregation
         constexpr static uint16_t header_size = sizeof(ip) + sizeof(ip_extra_t);
         // 构造首部
         connection_key_union connection{.key = key};
-        struct
-        {
-            ip basic;
-            ip_extra_t extra;
-        } header{
-            .basic{
-                .ip_hl = header_size / 4,
-                .ip_v = 4,
-
-                .ip_tos = 0,
-                .ip_len = header_size,
-                .ip_ttl = 64,
-                .ip_p = IPPROTO_MINE,
-            },
-            .extra{
-                .host = _tun.address(),
-                .src_index = connection.src_index,
-                .dst_index = connection.dst_index,
-            },
+        ip_extra_t extra{
+            .host = _tun.address(),
+            .src_index = connection.src_index,
+            .dst_index = connection.dst_index,
         };
-        { // 填写基于连接的包序号
-            READ_GRAUD(_connection_mutex);
-            auto &c = _connections.at(dst.s_addr).items.at(key);
-            reinterpret_cast<extra_t *>(iov[1].iov_base)->state = c.state();
-            header.basic.ip_id = c.get_id();
-        }
         // 填写物理网络中的目的地址
         // 远程网卡只增不减，此处只读，因此不用上锁
-        header.basic.ip_dst = _remotes.at(dst.s_addr).at(connection.dst_index);
-        // 构造消息
         sockaddr_in remote{
             .sin_family = AF_INET,
-            .sin_addr = header.basic.ip_dst,
+            .sin_port = 9999,
+            .sin_addr = _remotes.at(dst.s_addr).at(connection.dst_index),
         };
-        iov[0] = {.iov_base = &header, .iov_len = sizeof(header)};
-        for (auto i = 1; i < count; ++i)
-            header.basic.ip_len += iov[i].iov_len;
+        iov[0] = {.iov_base = &extra, .iov_len = sizeof(extra)};
         msghdr msg{
             .msg_name = &remote,
             .msg_namelen = sizeof(remote),
@@ -109,9 +85,7 @@ namespace autolabor::connection_aggregation
         };
         // 填写源地址，发送
         READ_GRAUD(_local_mutex);
-        const auto &d = _devices.at(connection.src_index);
-        header.basic.ip_src = d.address();
-        if (header.basic.ip_len == d.send(&msg))
+        if (_devices.at(connection.src_index).send(&msg))
         {
             // 此处已经锁了 local，connection 移除需要先获得 local，所以此处不用上锁
             _connections.at(dst.s_addr).items.at(key).sent_once();
