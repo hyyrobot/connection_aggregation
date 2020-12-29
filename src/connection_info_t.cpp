@@ -3,11 +3,19 @@
 namespace autolabor::connection_aggregation
 {
     connection_info_t::connection_info_t()
-        : _state(0), _sent(0), _received(0) {}
+        : _state_local(0),
+          _state_remote(0),
+          _sent(0),
+          _received(0) {}
 
-    uint8_t connection_info_t::state() const
+    uint8_t connection_info_t::state_local() const
     {
-        return _state;
+        return _state_local;
+    }
+
+    uint8_t connection_info_t::state_remote() const
+    {
+        return _state_remote;
     }
 
     size_t connection_info_t::sent_once()
@@ -17,9 +25,8 @@ namespace autolabor::connection_aggregation
 
     size_t connection_info_t::received_once(extra_t extra)
     {
-        auto s = _state.load();
-        while (s < 2 && !_state.compare_exchange_strong(s, extra.state + 1))
-            ;
+        _state_remote = extra.state;
+        _state_local = std::min(2, _state_remote + 1);
 
         return ++_received;
     }
@@ -27,7 +34,7 @@ namespace autolabor::connection_aggregation
     std::ostream &operator<<(std::ostream &out, const connection_info_t &info)
     {
         return out << "state\t| in\t| out " << std::endl
-                   << +info._state
+                   << +info._state_local
                    << "\t| " << info._received
                    << "\t| " << info._sent;
     }

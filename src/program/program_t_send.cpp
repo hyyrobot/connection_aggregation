@@ -24,7 +24,7 @@ namespace autolabor::connection_aggregation
         {
             READ_GRAUD(_connection_mutex);
             for (const auto &[k, c] : _connections.at(dst.s_addr).items)
-                if (c.state() < 2)
+                if (c.state_local() < 2 || c.state_remote() < 2)
                     v.emplace_back(k);
         }
         return std::count_if(v.begin(), v.end(), [&](auto k) { return send_single(dst, k, iov, iov_len); }) == v.size();
@@ -49,7 +49,7 @@ namespace autolabor::connection_aggregation
             extra.id = srand.get_id();
             for (const auto &[k, c] : srand.items)
             {
-                auto s = c.state();
+                auto s = c.state_local();
                 if (s > max)
                     v[max = s].push_back(k);
                 else if (s == max)
@@ -80,7 +80,7 @@ namespace autolabor::connection_aggregation
         { // 填写基于连接的包序号
             READ_GRAUD(_connection_mutex);
             reinterpret_cast<extra_t *>(iov[1].iov_base)->state =
-                _connections.at(dst.s_addr).items.at(key).state();
+                _connections.at(dst.s_addr).items.at(key).state_local();
         }
         msghdr msg{
             .msg_name = &remote,

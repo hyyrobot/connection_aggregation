@@ -28,7 +28,8 @@ namespace autolabor::connection_aggregation
         friend std::ostream &operator<<(std::ostream &, const connection_info_t &);
 
         // 连接状态
-        uint8_t state() const;
+        uint8_t state_local() const;
+        uint8_t state_remote() const;
 
         // 成功发送时调用
         size_t sent_once();
@@ -38,7 +39,7 @@ namespace autolabor::connection_aggregation
 
     private:
         // 状态
-        std::atomic_uint8_t _state;
+        uint8_t _state_local, _state_remote;
 
         // 发送、接收次数统计
         std::atomic<size_t> _sent, _received;
@@ -72,7 +73,7 @@ namespace autolabor::connection_aggregation
         // 收
         std::list<uint16_t> _received_id;
         std::unordered_map<uint16_t, stamp_t> _received_time;
-        
+
     public:
         connection_srand_t();
 
