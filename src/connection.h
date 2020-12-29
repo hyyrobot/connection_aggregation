@@ -30,9 +30,6 @@ namespace autolabor::connection_aggregation
         // 连接状态
         uint8_t state() const;
 
-        // 用于发送
-        uint16_t get_id();
-
         // 成功发送时调用
         size_t sent_once();
 
@@ -45,9 +42,6 @@ namespace autolabor::connection_aggregation
 
         // 发送、接收次数统计
         std::atomic<size_t> _sent, _received;
-
-        // 发送序号
-        std::atomic<uint16_t> _out_id;
     };
 
     // 连接表示法

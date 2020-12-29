@@ -19,7 +19,7 @@ int main()
     std::this_thread::sleep_for(.1s);
 
     inet_pton(AF_INET, "10.0.0.2", &address0);
-    inet_pton(AF_INET, "192.168.18.204", &address1);
+    inet_pton(AF_INET, "188.131.141.243", &address1);
     program.add_remote(address0, 2, address1);
     program.send_handshake(address0);
 
@@ -40,23 +40,15 @@ int main()
         while (true)
         {
             auto n = read(program.tun(), buffer, sizeof(buffer));
-            if (n <= 0)
-            {
-                std::cout << "n = " << n << std::endl;
-                continue;
-            }
-
-            auto forward = false;
-            switch (reinterpret_cast<const ip *>(buffer)->ip_p)
-            {
-            case IPPROTO_ICMP:
-            case IPPROTO_TCP:
-            case IPPROTO_UDP:
-                forward = true;
-                break;
-            }
-            if (forward)
-                program.forward(address0, buffer, n);
+            if (n > 0)
+                switch (reinterpret_cast<const ip *>(buffer)->ip_p)
+                {
+                case IPPROTO_ICMP:
+                case IPPROTO_TCP:
+                case IPPROTO_UDP:
+                    program.forward(address0, buffer, n);
+                    break;
+                }
         }
     }).detach();
 
