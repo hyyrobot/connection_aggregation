@@ -5,6 +5,7 @@
 #include <fcntl.h>     // open
 #include <sys/ioctl.h> // ioctl
 #include <unistd.h>    // read
+#include <sys/epoll.h> // epoll
 #include <linux/rtnetlink.h>
 #include <linux/if_tun.h>
 
@@ -18,7 +19,8 @@ namespace autolabor::connection_aggregation
     host_t::host_t(const char *name, in_addr address)
         : _address(address),
           _netlink(bind_netlink(RTMGRP_LINK)),
-          _tun(open("/dev/net/tun", O_RDWR))
+          _tun(open("/dev/net/tun", O_RDWR)),
+          _epoll(epoll_create1(0))
     {
         // 顺序不能变：
         // 1. 注册 TUN

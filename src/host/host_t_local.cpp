@@ -17,7 +17,7 @@ namespace autolabor::connection_aggregation
     {
         {
             READ_GRAUD(_device_mutex);
-            if (!_devices.try_emplace(index, name).second)
+            if (!_devices.try_emplace(index, name, _epoll.operator int()).second)
                 return;
         }
         {

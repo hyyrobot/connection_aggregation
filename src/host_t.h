@@ -18,11 +18,14 @@ namespace autolabor::connection_aggregation
         // 应该仅由服务器调用，不要滥用
         void bind(device_index_t, uint16_t);
 
-        // 添加一个地址，建议对每个主机只调用一次
+        // 添加一个已知的服务器的地址
         void add_remote(in_addr, uint16_t, in_addr);
 
+        // 接收
+        size_t receive(uint8_t *, size_t);
+
     private:
-        fd_guard_t _netlink, _tun;
+        fd_guard_t _netlink, _tun, _epoll;
         void local_monitor();
         void device_added(device_index_t, const char *);
         void device_removed(device_index_t);

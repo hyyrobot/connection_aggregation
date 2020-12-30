@@ -25,6 +25,7 @@ add_library(kernel
     src/host/host_t_constructor.cpp
     src/host/host_t_local.cpp
     src/host/host_t_remote.cpp
+    src/host/host_t_receive.cpp
     src/host/host_t_access.cpp
 )
 
