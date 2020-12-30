@@ -22,6 +22,17 @@ namespace autolabor::connection_aggregation
                 o << ']' << std::endl;
             }
         }
+        if (host._srands.empty())
+            o << "srands: []" << std::endl;
+        else
+        {
+            o << "srands:" << std::endl;
+            for (auto &[a, s] : host._srands)
+            {
+                inet_ntop(AF_INET, &a, text, sizeof(text));
+                o << "  " << text << ": " << s << std::endl;
+            }
+        }
         return o;
     }
 } // namespace autolabor::connection_aggregation

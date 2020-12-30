@@ -15,17 +15,30 @@ namespace autolabor::connection_aggregation
 
     void host_t::device_added(device_index_t index, const char *name)
     {
-        READ_GRAUD(_device_mutex);
-        _devices.try_emplace(index, name);
+        {
+            READ_GRAUD(_device_mutex);
+            if (!_devices.try_emplace(index, name).second)
+                return;
+        }
+        {
+            READ_GRAUD(_srand_mutex);
+            for (auto &[_, s] : _srands)
+                s.device_detected(index);
+        }
     }
 
     void host_t::device_removed(device_index_t index)
     {
-        READ_GRAUD(_device_mutex);
-        auto p = _devices.find(index);
-        if (p == _devices.end())
-            return;
-        _devices.erase(index);
+        {
+            READ_GRAUD(_device_mutex);
+            if (!_devices.erase(index))
+                return;
+        }
+        {
+            READ_GRAUD(_srand_mutex);
+            for (auto &[_, s] : _srands)
+                s.device_removed(index);
+        }
     }
 
     void host_t::local_monitor()

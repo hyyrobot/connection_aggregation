@@ -19,10 +19,12 @@ add_library(kernel
     src/connection_t.h
     # 连接束
     src/srand_t.h
+    src/srand_t.cpp
     # 主机
     src/host_t.h
     src/host/host_t_constructor.cpp
     src/host/host_t_local.cpp
+    src/host/host_t_remote.cpp
     src/host/host_t_access.cpp
 )
 
