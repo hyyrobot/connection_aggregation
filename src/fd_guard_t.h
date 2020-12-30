@@ -2,7 +2,6 @@
 #define FD_GUARD_T_H
 
 #include <cstdint>
-#include <linux/rtnetlink.h>
 
 namespace autolabor::connection_aggregation
 {
