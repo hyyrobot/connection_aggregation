@@ -6,14 +6,23 @@
 
 namespace autolabor::connection_aggregation
 {
+
     struct connection_t
     {
+        struct snapshot_t
+        {
+            uint8_t state, opposite;
+            int64_t sent, received, counter;
+        };
+
         // 连接降级
         constexpr static size_t COUNT_OUT = 300;
 
         connection_t();
 
         uint8_t state() const;
+        void snapshot(snapshot_t *) const;
+
         bool need_handshake() const;
 
         size_t sent_once();

@@ -44,6 +44,7 @@ namespace autolabor::connection_aggregation
                 if (type->forward)
                     ; // 重填 ip 头向 tun 转发
             }
+            send_handshake(*source);
 
             return n;
         }

@@ -17,11 +17,12 @@ int main()
     std::this_thread::sleep_for(.2s);
     std::cout << host << std::endl;
 
-    host.bind(4, 9999);
+    host.bind(2, 9999);
 
     uint8_t buffer[2048];
     while (true)
-        std::cout << host.receive(buffer, sizeof(buffer)) << std::endl;
+        if (host.receive(buffer, sizeof(buffer)))
+            std::cout << host << std::endl;
 
     return 0;
 }

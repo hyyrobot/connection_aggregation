@@ -21,8 +21,11 @@ namespace autolabor::connection_aggregation
 
     struct pack_type_t
     {
-        uint8_t state : 2;
-        bool forward : 1;
+        uint8_t
+            state : 2;
+        bool
+            multiple : 1, // 需要去重/包含 id
+            forward : 1;  // 到达后向应用层上传
     };
 
     // 连接表示法
@@ -76,7 +79,7 @@ namespace autolabor::connection_aggregation
         // TODO
         srand_t *get_srand(in_addr);
 
-        size_t send_single(in_addr, connection_key_union, bool = false, const uint8_t * = nullptr, size_t = 0);
+        size_t send_single(in_addr, connection_key_union, pack_type_t, const uint8_t * = nullptr, size_t = 0);
 
         char _name[IFNAMSIZ];
         device_index_t _index;

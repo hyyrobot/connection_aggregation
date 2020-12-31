@@ -11,9 +11,20 @@ namespace autolabor::connection_aggregation
         return _state;
     }
 
+    void connection_t::snapshot(snapshot_t *buffer) const
+    {
+        *buffer = {
+            .state = _state,
+            .opposite = _oppesite,
+            .sent = _sent,
+            .received = _received,
+            .counter = _counter,
+        };
+    }
+
     bool connection_t::need_handshake() const
     {
-        return _state < 3 && _counter < 3 * COUNT_OUT;
+        return (_state < 3 || _oppesite < 3) && _counter < 3 * COUNT_OUT;
     }
 
     size_t connection_t::sent_once()

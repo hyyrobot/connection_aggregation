@@ -20,7 +20,7 @@ namespace autolabor::connection_aggregation
     }
 
     device_t::~device_t()
-    {
+    { // 从 epoll 注销套接字到
         epoll_ctl(_epoll, EPOLL_CTL_DEL, _socket, nullptr);
     }
 

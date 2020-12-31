@@ -16,7 +16,7 @@ int main()
 
     in_addr ip;
     inet_pton(AF_INET, "10.0.0.2", &address);
-    inet_pton(AF_INET, "192.168.10.2", &ip);
+    inet_pton(AF_INET, "192.168.100.3", &ip);
     host.add_remote(address, 9999, ip);
 
     std::this_thread::sleep_for(.2s);
@@ -25,7 +25,8 @@ int main()
     std::thread([&host] {
         uint8_t buffer[2048];
         while (true)
-            std::cout << "received: " << host.receive(buffer, sizeof(buffer)) << std::endl;
+            if (host.receive(buffer, sizeof(buffer)))
+                std::cout << host << std::endl;
     }).detach();
 
     while (true)
