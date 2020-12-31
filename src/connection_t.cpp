@@ -4,7 +4,6 @@ namespace autolabor::connection_aggregation
 {
     connection_t::connection_t()
         : _state(0), _oppesite(0),
-          _id(0),
           _sent(0), _received(0), _counter(0) {}
 
     uint8_t connection_t::state() const
@@ -12,9 +11,9 @@ namespace autolabor::connection_aggregation
         return _state;
     }
 
-    uint16_t connection_t::get_id()
+    bool connection_t::need_handshake() const
     {
-        return ++_id;
+        return _state < 3 && _counter < 3 * COUNT_OUT;
     }
 
     size_t connection_t::sent_once()

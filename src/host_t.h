@@ -65,6 +65,8 @@ namespace autolabor::connection_aggregation
         // 接收
         size_t receive(uint8_t *, size_t);
 
+        size_t send_handshake(in_addr);
+
     private:
         fd_guard_t _netlink, _tun, _epoll;
         void local_monitor();
@@ -74,7 +76,7 @@ namespace autolabor::connection_aggregation
         // TODO
         srand_t *get_srand(in_addr);
 
-        size_t send_single(in_addr, connection_key_union, bool, const uint8_t *, size_t);
+        size_t send_single(in_addr, connection_key_union, bool = false, const uint8_t * = nullptr, size_t = 0);
 
         char _name[IFNAMSIZ];
         device_index_t _index;

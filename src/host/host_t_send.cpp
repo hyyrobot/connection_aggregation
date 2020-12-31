@@ -1,7 +1,27 @@
 #include "../host_t.h"
 
+#include <vector>
+
 namespace autolabor::connection_aggregation
 {
+    size_t host_t::send_handshake(in_addr dst)
+    {
+        std::vector<connection_key_t> keys;
+        {
+            READ_LOCK(_srand_mutex);
+            auto &s = _srands.at(dst.s_addr);
+            {
+                read_lock l(s.connection_mutex);
+                for (auto &[k, c] : s.connections)
+                    if (c.need_handshake())
+                        keys.push_back(k);
+            }
+        }
+        for (auto k : keys)
+            send_single(dst, {.key = k});
+        return keys.size();
+    }
+
     size_t host_t::send_single(in_addr dst, connection_key_union _union, bool forward, const uint8_t *buffer, size_t size)
     {
         if (!forward)

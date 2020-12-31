@@ -14,14 +14,13 @@ namespace autolabor::connection_aggregation
         connection_t();
 
         uint8_t state() const;
-        uint16_t get_id();
+        bool need_handshake() const;
 
         size_t sent_once();
         size_t received_once(uint8_t);
 
     private:
         std::atomic_uint8_t _state, _oppesite;
-        std::atomic_uint16_t _id;
         std::atomic_int64_t _sent, _received, _counter;
     };
 
