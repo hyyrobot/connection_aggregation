@@ -7,9 +7,11 @@
 
 namespace autolabor::connection_aggregation
 {
+    using device_index_t = uint16_t;
+
     struct device_t
     {
-        device_t(const char *, int);
+        device_t(const char *, int, device_index_t);
         ~device_t();
 
         void bind(uint16_t) const;

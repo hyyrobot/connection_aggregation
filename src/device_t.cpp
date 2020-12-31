@@ -6,7 +6,7 @@
 
 namespace autolabor::connection_aggregation
 {
-    device_t::device_t(const char *name, int epoll)
+    device_t::device_t(const char *name, int epoll, device_index_t index)
         : _socket(socket(AF_INET, SOCK_DGRAM, 0)),
           _epoll(epoll)
     {
@@ -14,7 +14,7 @@ namespace autolabor::connection_aggregation
         if (setsockopt(_socket, SOL_SOCKET, SO_BINDTODEVICE, name, std::strlen(name)))
             THROW_ERRNO(__FILE__, __LINE__, "bind socket to device " << name);
         // 注册套接字到 epoll
-        epoll_event event{.events = EPOLLIN | EPOLLET, .data{.ptr = this}};
+        epoll_event event{.events = EPOLLIN | EPOLLET, .data{.u32 = index}};
         if (epoll_ctl(epoll, EPOLL_CTL_ADD, _socket, &event))
             THROW_ERRNO(__FILE__, __LINE__, "add socket of " << name << " to epoll");
     }

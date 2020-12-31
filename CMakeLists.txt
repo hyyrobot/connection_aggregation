@@ -10,16 +10,12 @@ add_library(kernel
     # RAII 文件描述符
     src/fd_guard_t.h
     src/fd_guard_t.cpp
-    # 类型定义
-    src/typealias.h
     # 本机网卡
     src/device_t.h
     src/device_t.cpp
     # 连接
     src/connection_t.h
-    # 连接束
-    src/srand_t.h
-    src/srand_t.cpp
+    src/connection_t.cpp
     # 主机
     src/host_t.h
     src/host/host_t_constructor.cpp

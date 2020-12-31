@@ -5,12 +5,34 @@ namespace autolabor::connection_aggregation
     void host_t::add_remote(in_addr remote_host, uint16_t port, in_addr address)
     {
         {
-            WRITE_GRAUD(_srand_mutex);
-            auto &srand = _srands.try_emplace(remote_host.s_addr).first->second;
-            if (!srand.remote_detected(port, address))
+            WRITE_LOCK(_srand_mutex);
+            _srands.try_emplace(remote_host.s_addr).first;
+        }
+        {
+            READ_LOCK(_srand_mutex);
+            auto s = get_srand(remote_host);
+            if (!s)
                 return;
-            READ_GRAUD(_device_mutex);
-            srand.add_connections(port, _devices);
+            {
+                write_lock lp(s->port_mutex);
+                auto [q, b] = s->ports.try_emplace(port, address);
+                if (b)
+                {
+                    READ_LOCK(_device_mutex);
+                    write_lock lc(s->connection_mutex);
+                    connection_key_union _union{.pair{.dst_port = port}};
+                    for (const auto &[i, _] : _devices)
+                    {
+                        _union.pair.src_index = i;
+                        s->connections.emplace(
+                            std::piecewise_construct,
+                            std::forward_as_tuple(_union.key),
+                            std::forward_as_tuple());
+                    }
+                }
+                else
+                    q->second = address;
+            }
         }
     }
 

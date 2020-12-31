@@ -9,35 +9,61 @@ namespace autolabor::connection_aggregation
 {
     void host_t::bind(device_index_t index, uint16_t port)
     {
-        READ_GRAUD(_device_mutex);
+        READ_LOCK(_device_mutex);
         _devices.at(index).bind(port);
+    }
+
+    srand_t *host_t::get_srand(in_addr address)
+    {
+        auto p = _srands.find(address.s_addr);
+        if (p == _srands.end())
+            return nullptr;
+        return &p->second;
     }
 
     void host_t::device_added(device_index_t index, const char *name)
     {
         {
-            READ_GRAUD(_device_mutex);
-            if (!_devices.try_emplace(index, name, _epoll.operator int()).second)
+            READ_LOCK(_device_mutex);
+            if (!_devices.try_emplace(index, name, _epoll.operator int(), index).second)
                 return;
         }
+        connection_key_union _union{.pair{.src_index = index}};
         {
-            READ_GRAUD(_srand_mutex);
+            READ_LOCK(_srand_mutex);
             for (auto &[_, s] : _srands)
-                s.device_detected(index);
+            {
+                read_lock lp(s.port_mutex);
+                write_lock lc(s.connection_mutex);
+                for (const auto [port, _] : s.ports)
+                {
+                    _union.pair.dst_port = port;
+                    s.connections.try_emplace(_union.key);
+                }
+            }
         }
     }
 
     void host_t::device_removed(device_index_t index)
     {
         {
-            READ_GRAUD(_device_mutex);
+            READ_LOCK(_device_mutex);
             if (!_devices.erase(index))
                 return;
         }
+        connection_key_union _union{.pair{.src_index = index}};
         {
-            READ_GRAUD(_srand_mutex);
+            READ_LOCK(_srand_mutex);
             for (auto &[_, s] : _srands)
-                s.device_removed(index);
+            {
+                read_lock lp(s.port_mutex);
+                write_lock lc(s.connection_mutex);
+                for (const auto [port, _] : s.ports)
+                {
+                    _union.pair.dst_port = port;
+                    s.connections.erase(_union.key);
+                }
+            }
         }
     }
 

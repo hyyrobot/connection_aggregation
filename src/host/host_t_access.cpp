@@ -10,7 +10,7 @@ namespace autolabor::connection_aggregation
         inet_ntop(AF_INET, &host._address, text, sizeof(text));
         o << host._name << '(' << host._index << "): " << text << std::endl;
         {
-            std::shared_lock<std::shared_mutex>(host._device_mutex);
+            read_lock l(host._device_mutex);
             if (host._devices.empty())
                 o << "devices: []" << std::endl;
             else
@@ -22,17 +22,31 @@ namespace autolabor::connection_aggregation
                 o << ']' << std::endl;
             }
         }
-        if (host._srands.empty())
-            o << "srands: []" << std::endl;
-        else
         {
-            o << "srands:" << std::endl;
-            for (auto &[a, s] : host._srands)
+            read_lock l(host._srand_mutex);
+            if (host._srands.empty())
+                o << "srands: []" << std::endl;
+            else
             {
-                inet_ntop(AF_INET, &a, text, sizeof(text));
-                o << "  " << text << ": " << s << std::endl;
+                o << "srands:" << std::endl;
+                for (auto &[a, s] : host._srands)
+                {
+                    inet_ntop(AF_INET, &a, text, sizeof(text));
+                    o << "  " << text << ": [";
+                    read_lock ll(s.port_mutex);
+                    auto p = s.ports.begin();
+                    inet_ntop(AF_INET, &p->second, text, sizeof(text));
+                    o << text << ':' << p->first;
+                    for (++p; p != s.ports.end(); ++p)
+                    {
+                        inet_ntop(AF_INET, &p->second, text, sizeof(text));
+                        o << ", " << text << ':' << p->first;
+                    }
+                    o << ']' << std::endl;
+                }
             }
         }
+
         return o;
     }
 } // namespace autolabor::connection_aggregation
