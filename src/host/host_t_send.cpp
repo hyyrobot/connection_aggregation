@@ -1,5 +1,7 @@
 #include "../host_t.h"
 
+#include "../ERRNO_MACRO.h"
+
 #include <vector>
 
 namespace autolabor::connection_aggregation
@@ -56,7 +58,17 @@ namespace autolabor::connection_aggregation
 
         {
             READ_LOCK(_device_mutex);
-            return _devices.at(_union.pair.src_index).send(&msg);
+            auto result = _devices.at(_union.pair.src_index).send(&msg);
+            if (result > 0)
+            {
+                READ_LOCK(_srand_mutex);
+                auto &s = _srands.at(dst.s_addr);
+                read_lock l(s.connection_mutex);
+                s.connections.at(_union.key).sent_once();
+            }
+            else
+                THROW_ERRNO(__FILE__, __LINE__, "send msg from " << _union.pair.src_index);
+            return result;
         }
     }
 
