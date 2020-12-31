@@ -19,6 +19,12 @@ namespace autolabor::connection_aggregation
     using read_lock = std::shared_lock<std::shared_mutex>;
     using write_lock = std::unique_lock<std::shared_mutex>;
 
+    struct pack_type_t
+    {
+        uint8_t state : 2;
+        bool forward : 1;
+    };
+
     // 连接表示法
     union connection_key_union
     {
@@ -67,6 +73,8 @@ namespace autolabor::connection_aggregation
 
         // TODO
         srand_t *get_srand(in_addr);
+
+        size_t send_single(in_addr, connection_key_union, bool, const uint8_t *, size_t);
 
         char _name[IFNAMSIZ];
         device_index_t _index;

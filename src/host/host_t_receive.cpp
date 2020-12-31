@@ -45,6 +45,8 @@ namespace autolabor::connection_aggregation
                     continue;
                 read_lock lc(s->connection_mutex);
                 s->connections.at(_union.key).received_once(type->state);
+                if (type->forward)
+                    ; // 重填 ip 头向 tun 转发
             }
 
             return n;
