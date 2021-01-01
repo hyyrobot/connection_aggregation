@@ -10,21 +10,19 @@ namespace autolabor::connection_aggregation
         }
         {
             READ_LOCK(_srand_mutex);
-            auto s = get_srand(remote_host);
-            if (!s)
-                return;
+            auto &s = _srands.at(remote_host.s_addr);
             {
-                write_lock lp(s->port_mutex);
-                auto [q, b] = s->ports.try_emplace(port, address);
+                write_lock lp(s.port_mutex);
+                auto [q, b] = s.ports.try_emplace(port, address);
                 if (b)
                 {
                     READ_LOCK(_device_mutex);
-                    write_lock lc(s->connection_mutex);
+                    write_lock lc(s.connection_mutex);
                     connection_key_union _union{.pair{.dst_port = port}};
                     for (const auto &[i, _] : _devices)
                     {
                         _union.pair.src_index = i;
-                        s->connections.emplace(
+                        s.connections.emplace(
                             std::piecewise_construct,
                             std::forward_as_tuple(_union.key),
                             std::forward_as_tuple());

@@ -56,20 +56,21 @@ namespace autolabor::connection_aggregation
             .msg_iovlen = buffer && size ? len : len - 1,
         };
 
+        size_t result;
         {
             READ_LOCK(_device_mutex);
-            auto result = _devices.at(_union.pair.src_index).send(&msg);
-            if (result > 0)
-            {
-                READ_LOCK(_srand_mutex);
-                auto &s = _srands.at(dst.s_addr);
-                read_lock l(s.connection_mutex);
-                s.connections.at(_union.key).sent_once();
-            }
-            else
-                THROW_ERRNO(__FILE__, __LINE__, "send msg from " << _union.pair.src_index);
-            return result;
+            result = _devices.at(_union.pair.src_index).send(&msg);
         }
+        if (result > 0)
+        {
+            READ_LOCK(_srand_mutex);
+            auto &s = _srands.at(dst.s_addr);
+            read_lock l(s.connection_mutex);
+            s.connections.at(_union.key).sent_once();
+        }
+        else
+            THROW_ERRNO(__FILE__, __LINE__, "send msg from " << _union.pair.src_index);
+        return result;
     }
 
 } // namespace autolabor::connection_aggregation

@@ -76,9 +76,6 @@ namespace autolabor::connection_aggregation
         void device_added(device_index_t, const char *);
         void device_removed(device_index_t);
 
-        // TODO
-        srand_t *get_srand(in_addr);
-
         size_t send_single(in_addr, connection_key_union, pack_type_t, const uint8_t * = nullptr, size_t = 0);
 
         char _name[IFNAMSIZ];

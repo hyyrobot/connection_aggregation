@@ -13,14 +13,6 @@ namespace autolabor::connection_aggregation
         _devices.at(index).bind(port);
     }
 
-    srand_t *host_t::get_srand(in_addr address)
-    {
-        auto p = _srands.find(address.s_addr);
-        if (p == _srands.end())
-            return nullptr;
-        return &p->second;
-    }
-
     void host_t::device_added(device_index_t index, const char *name)
     {
         {
