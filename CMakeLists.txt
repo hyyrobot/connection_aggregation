@@ -5,35 +5,31 @@ set(CMAKE_CXX_STANDARD 20)
 include_directories(src)
 
 add_library(kernel
-    src/functions.h
-    src/functions.cpp
-
+    # 产生能定位的异常
+    src/ERRNO_MACRO.h
+    # RAII 文件描述符
     src/fd_guard_t.h
     src/fd_guard_t.cpp
-
-    src/net_device_t.h
-    src/net_device_t.cpp
-
-    src/tun_device_t.h
-    src/tun_device_t.cpp
-    
-    src/connection.h
-    src/connection_info_t.cpp
-    src/connection_srand_t.cpp
-
-    src/program_t.h
-    src/program/program_t_constructor.cpp
-    src/program/program_t_local.cpp
-    src/program/program_t_remote.cpp
-    src/program/program_t_access.cpp
-    src/program/program_t_send.cpp
-    src/program/program_t_receive.cpp
+    # 本机网卡
+    src/device_t.h
+    src/device_t.cpp
+    # 连接
+    src/connection_t.h
+    src/connection_t.cpp
+    # 主机
+    src/host_t.h
+    src/host/host_t_constructor.cpp
+    src/host/host_t_local.cpp
+    src/host/host_t_remote.cpp
+    src/host/host_t_send.cpp
+    src/host/host_t_receive.cpp
+    src/host/host_t_access.cpp
 )
 
 find_package(Threads)
 
-add_executable(test test/test.cpp)
-target_link_libraries(test kernel ${CMAKE_THREAD_LIBS_INIT})
+add_executable(service test/service.cpp)
+target_link_libraries(service kernel ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(send test/raw_sender.cpp)
 target_link_libraries(send kernel ${CMAKE_THREAD_LIBS_INIT})

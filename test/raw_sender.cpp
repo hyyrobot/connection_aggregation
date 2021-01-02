@@ -1,75 +1,48 @@
-#include "program_t.h"
+#include "host_t.h"
 
-#include <netinet/ip.h>
 #include <arpa/inet.h>
-#include <unistd.h>
 
-#include <thread>
 #include <iostream>
+#include <sstream>
+#include <thread>
 
 int main()
 {
     using namespace autolabor::connection_aggregation;
     using namespace std::chrono_literals;
 
-    in_addr address0, address1;
-    inet_pton(AF_INET, "10.0.0.1", &address0);
-    program_t program("user", address0);
+    in_addr address;
+    inet_pton(AF_INET, "10.0.0.1", &address);
+    host_t host("user", address);
 
-    std::this_thread::sleep_for(.1s);
+    in_addr ip;
+    inet_pton(AF_INET, "10.0.0.2", &address);
+    inet_pton(AF_INET, "192.168.100.3", &ip);
+    host.add_remote(address, 9999, ip);
+    std::this_thread::sleep_for(std::chrono::microseconds(500));
 
-    inet_pton(AF_INET, "10.0.0.2", &address0);
-    inet_pton(AF_INET, "192.168.18.198", &address1);
-    program.add_remote(address0, 2, address1);
-    program.send_handshake(address0);
+    std::cout << host << std::endl;
+    host.send_handshake(address);
 
-    std::this_thread::sleep_for(.2s);
-    std::cout << program;
-
-    std::thread([&program] {
-        unsigned char buffer[1024];
-        while (true)
-        {
-            program.receive(buffer, sizeof(buffer));
-            std::cout << program << std::endl;
-        }
-    }).detach();
-
-    std::thread([&program, address0] {
+    std::thread([&host] {
         uint8_t buffer[2048];
-        while (true)
-        {
-            auto n = read(program.tun(), buffer, sizeof(buffer));
-            if (n <= 0)
-            {
-                std::cout << "n = " << n << std::endl;
-                continue;
-            }
-
-            auto forward = false;
-            switch (reinterpret_cast<const ip *>(buffer)->ip_p)
-            {
-            case IPPROTO_ICMP:
-            case IPPROTO_TCP:
-            case IPPROTO_UDP:
-                forward = true;
-                break;
-            }
-            if (forward)
-                program.forward(address0, buffer, n);
-        }
+        host.receive(buffer, sizeof(buffer));
     }).detach();
 
     fd_guard_t udp(socket(AF_INET, SOCK_DGRAM, 0));
     sockaddr_in remote{
         .sin_family = AF_INET,
-        .sin_port = 100,
-        .sin_addr = address0,
+        .sin_port = 12345,
+        .sin_addr = address,
     };
-    while (true)
+
+    for (auto i = 0;; ++i)
     {
-        sendto(udp, "Hello", 6, 0, (sockaddr *)&remote, sizeof(remote));
-        std::this_thread::sleep_for(1s);
+        std::stringstream builder;
+        builder << i << '\t' << "Hello, world!";
+        auto text = builder.str();
+        sendto(udp, text.c_str(), text.size() + 1, MSG_WAITALL, (sockaddr *)&remote, sizeof(remote));
+        std::this_thread::sleep_for(.02s);
     }
 
     return 0;

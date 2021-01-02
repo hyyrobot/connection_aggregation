@@ -1,42 +1,37 @@
-#include "program_t.h"
+#include "host_t.h"
 
-#include <netinet/ip.h>
 #include <arpa/inet.h>
-#include <unistd.h>
 
-#include <thread>
 #include <iostream>
+#include <thread>
 
 int main()
 {
     using namespace autolabor::connection_aggregation;
+    using namespace std::chrono_literals;
 
     in_addr address;
     inet_pton(AF_INET, "10.0.0.2", &address);
-    program_t program("user", address);
+    host_t host("server", address);
+    while (!host.bind(4, 9999))
+        ;
 
-    using namespace std::chrono_literals;
-    std::this_thread::sleep_for(.1s);
+    std::cout << host << std::endl;
 
-    std::cout << program << std::endl;
-
-    char text[32];
-
-    std::thread([&program] {
-        unsigned char buffer[1024];
-        while (true)
-            program.receive(buffer, sizeof(buffer));
+    std::thread([&host] {
+        uint8_t buffer[2048];
+        host.receive(buffer, sizeof(buffer));
     }).detach();
 
-    unsigned char buffer[1024];
     fd_guard_t udp(socket(AF_INET, SOCK_DGRAM, 0));
-    sockaddr_in port{
+    sockaddr_in local{
         .sin_family = AF_INET,
-        .sin_port = 100,
+        .sin_port = 12345,
     };
-    bind(udp, (sockaddr *)&port, sizeof(port));
+    bind(udp, (sockaddr *)&local, sizeof(local));
     while (true)
     {
+        uint8_t buffer[32];
         recv(udp, buffer, sizeof(buffer), MSG_WAITALL);
         std::cout << buffer << std::endl;
     }
