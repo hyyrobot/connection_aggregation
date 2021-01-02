@@ -6,7 +6,6 @@
 
 namespace autolabor::connection_aggregation
 {
-
     fd_guard_t::fd_guard_t(int fd) : _fd(fd)
     {
         if (fd < 0)

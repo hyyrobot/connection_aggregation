@@ -8,7 +8,9 @@
 #include <linux/if.h>
 
 #include <unordered_map>
+#include <queue>
 #include <shared_mutex>
+#include <chrono>
 #include <ostream>
 
 #define READ_LOCK(MUTEX) std::shared_lock<decltype(MUTEX)> MUTEX##_guard(MUTEX)
@@ -49,10 +51,19 @@ namespace autolabor::connection_aggregation
     {
         mutable std::shared_mutex port_mutex, connection_mutex;
 
-        std::atomic_uint16_t id{};
-
         std::unordered_map<uint16_t, in_addr> ports;
         std::unordered_map<connection_key_t, connection_t> connections;
+
+        uint16_t get_id();
+        bool check_received(uint16_t);
+
+    private:
+        std::atomic_uint16_t _id{};
+
+        using stamp_t = std::chrono::steady_clock::time_point;
+        std::mutex _id_updater;
+        std::queue<uint16_t> _received_id;
+        std::unordered_map<uint16_t, stamp_t> _received_time;
     };
 
     struct host_t
@@ -62,13 +73,13 @@ namespace autolabor::connection_aggregation
 
         // 为某网卡的套接字绑定一个端口号
         // 应该仅由服务器调用，不要滥用
-        void bind(device_index_t, uint16_t);
+        bool bind(device_index_t, uint16_t);
 
         // 外部使用：添加一个已知的服务器的地址
         void add_remote(in_addr, uint16_t, in_addr);
 
         // 接收
-        size_t receive(uint8_t *, size_t);
+        void receive(uint8_t *, size_t);
 
         size_t send_handshake(in_addr);
 
@@ -79,7 +90,7 @@ namespace autolabor::connection_aggregation
         void device_added(device_index_t, const char *);
         void device_removed(device_index_t);
 
-        size_t send_single(in_addr, connection_key_union, uint8_t type_offset, uint8_t *, size_t);
+        size_t send_single(in_addr, connection_key_union, uint8_t *, size_t);
 
         char _name[IFNAMSIZ];
         device_index_t _index;

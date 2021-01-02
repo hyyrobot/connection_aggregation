@@ -28,8 +28,8 @@ add_library(kernel
 
 find_package(Threads)
 
-add_executable(test test/test.cpp)
-target_link_libraries(test ${CMAKE_THREAD_LIBS_INIT})
+add_executable(service test/service.cpp)
+target_link_libraries(service kernel ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(send test/raw_sender.cpp)
 target_link_libraries(send kernel ${CMAKE_THREAD_LIBS_INIT})

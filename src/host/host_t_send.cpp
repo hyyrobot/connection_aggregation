@@ -22,15 +22,20 @@ namespace autolabor::connection_aggregation
         }
         uint8_t nothing = 0;
         for (auto k : keys)
-            send_single(dst, {.key = k}, 0, &nothing, 1);
+            send_single(dst, {.key = k}, &nothing, 1);
         return keys.size();
+    }
+
+    uint16_t srand_t::get_id()
+    {
+        return _id++;
     }
 
     void host_t::forward()
     {
         static uint8_t buffer[65536];
         constexpr static pack_type_t TYPE{.multiple = true, .forward = true};
-        constexpr static auto PAYLOAD_OFFSET = 4, TYPE_OFFSET = 10;
+        constexpr static auto PAYLOAD_OFFSET = 4;
         while (true)
         {
             auto n = read(_tun, buffer, sizeof(buffer));
@@ -50,15 +55,15 @@ namespace autolabor::connection_aggregation
             // 改为
             //       4       |       4       |       4       |       4       |       4       |       4       |       4       |       4       |
             //                                                         direct source                                                         |
-            //                         id for srand                          |                             offset                            |
-            //              ttl              |            protocol           |   pack type   |                      zero                     |
+            //           pack type           |            nothing            |                             offset                            |
+            //              ttl              |            protocol           |                         id for srand                          |
             std::vector<connection_key_t> keys;
             auto max = 0;
             auto dst = ip_->ip_dst;
             {
                 READ_LOCK(_srand_mutex);
                 auto &s = _srands.at(dst.s_addr);
-                ip_->ip_id = s.id++;
+                ip_->ip_sum = s.get_id();
                 read_lock l(s.connection_mutex);
                 for (auto &[k, c] : s.connections)
                 {
@@ -75,15 +80,15 @@ namespace autolabor::connection_aggregation
                         keys.push_back(k);
                 }
             }
-            *reinterpret_cast<pack_type_t *>(buffer + TYPE_OFFSET) = TYPE;
+            *reinterpret_cast<pack_type_t *>(buffer + PAYLOAD_OFFSET) = TYPE;
             for (auto k : keys)
-                send_single(dst, {.key = k}, TYPE_OFFSET, buffer + PAYLOAD_OFFSET, n - PAYLOAD_OFFSET);
+                send_single(dst, {.key = k}, buffer + PAYLOAD_OFFSET, n - PAYLOAD_OFFSET);
         }
     }
 
-    size_t host_t::send_single(in_addr dst, connection_key_union _union, uint8_t type_offset, uint8_t *buffer, size_t size)
+    size_t host_t::send_single(in_addr dst, connection_key_union _union, uint8_t *buffer, size_t size)
     {
-        auto type = reinterpret_cast<pack_type_t *>(buffer + type_offset);
+        auto type = reinterpret_cast<pack_type_t *>(buffer);
         sockaddr_in remote{
             .sin_family = AF_INET,
             .sin_port = _union.pair.dst_port,

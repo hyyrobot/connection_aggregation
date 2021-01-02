@@ -7,10 +7,16 @@
 
 namespace autolabor::connection_aggregation
 {
-    void host_t::bind(device_index_t index, uint16_t port)
+    bool host_t::bind(device_index_t index, uint16_t port)
     {
         READ_LOCK(_device_mutex);
-        _devices.at(index).bind(port);
+        auto p = _devices.find(index);
+
+        if (p == _devices.end())
+            return false;
+
+        p->second.bind(port);
+        return true;
     }
 
     void host_t::device_added(device_index_t index, const char *name)
