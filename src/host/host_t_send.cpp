@@ -2,6 +2,9 @@
 
 #include "../ERRNO_MACRO.h"
 
+#include <netinet/ip.h>
+#include <unistd.h>
+
 #include <vector>
 
 namespace autolabor::connection_aggregation
@@ -12,20 +15,75 @@ namespace autolabor::connection_aggregation
         {
             READ_LOCK(_srand_mutex);
             auto &s = _srands.at(dst.s_addr);
-            {
-                read_lock l(s.connection_mutex);
-                for (auto &[k, c] : s.connections)
-                    if (c.need_handshake())
-                        keys.push_back(k);
-            }
+            read_lock l(s.connection_mutex);
+            for (auto &[k, c] : s.connections)
+                if (c.need_handshake())
+                    keys.push_back(k);
         }
+        uint8_t nothing = 0;
         for (auto k : keys)
-            send_single(dst, {.key = k}, {});
+            send_single(dst, {.key = k}, 0, &nothing, 1);
         return keys.size();
     }
 
-    size_t host_t::send_single(in_addr dst, connection_key_union _union, pack_type_t type, const uint8_t *buffer, size_t size)
+    void host_t::forward()
     {
+        static uint8_t buffer[65536];
+        constexpr static pack_type_t TYPE{.multiple = true, .forward = true};
+        constexpr static auto PAYLOAD_OFFSET = 4, TYPE_OFFSET = 10;
+        while (true)
+        {
+            auto n = read(_tun, buffer, sizeof(buffer));
+            if (n == 0)
+                continue;
+            if (n < 20)
+                THROW_ERRNO(__FILE__, __LINE__, "receive from tun");
+            // 丢弃非 ip v4 包
+            auto ip_ = reinterpret_cast<ip *>(buffer);
+            if (ip_->ip_v != 4)
+                continue;
+            // 报头
+            //       4       |       4       |       4       |       4       |       4       |       4       |       4       |       4       |
+            //    version    | header length |        type of service        |                        total length                           |
+            //                              id                               |                             offset                            |
+            //              ttl              |            protocol           |                            check sum                          |
+            // 改为
+            //       4       |       4       |       4       |       4       |       4       |       4       |       4       |       4       |
+            //                                                         direct source                                                         |
+            //                         id for srand                          |                             offset                            |
+            //              ttl              |            protocol           |   pack type   |                      zero                     |
+            std::vector<connection_key_t> keys;
+            auto max = 0;
+            auto dst = ip_->ip_dst;
+            {
+                READ_LOCK(_srand_mutex);
+                auto &s = _srands.at(dst.s_addr);
+                ip_->ip_id = s.id++;
+                read_lock l(s.connection_mutex);
+                for (auto &[k, c] : s.connections)
+                {
+                    auto s_ = c.state();
+                    if (s_ < max)
+                        continue;
+                    if (s_ > max)
+                    {
+                        max = s_;
+                        keys.resize(1);
+                        keys[0] = k;
+                    }
+                    else
+                        keys.push_back(k);
+                }
+            }
+            *reinterpret_cast<pack_type_t *>(buffer + TYPE_OFFSET) = TYPE;
+            for (auto k : keys)
+                send_single(dst, {.key = k}, TYPE_OFFSET, buffer + PAYLOAD_OFFSET, n - PAYLOAD_OFFSET);
+        }
+    }
+
+    size_t host_t::send_single(in_addr dst, connection_key_union _union, uint8_t type_offset, uint8_t *buffer, size_t size)
+    {
+        auto type = reinterpret_cast<pack_type_t *>(buffer + type_offset);
         sockaddr_in remote{
             .sin_family = AF_INET,
             .sin_port = _union.pair.dst_port,
@@ -39,21 +97,19 @@ namespace autolabor::connection_aggregation
             }
             {
                 read_lock l(s.connection_mutex);
-                type.state = s.connections.at(_union.key).state();
+                type->state = s.connections.at(_union.key).state();
             }
         }
 
         iovec iov[]{
             {.iov_base = &_address, .iov_len = sizeof(_address)},
-            {.iov_base = &type, .iov_len = sizeof(type)},
             {.iov_base = (void *)buffer, .iov_len = size},
         };
-        constexpr static auto len = sizeof(iov) / sizeof(iovec);
         msghdr msg{
             .msg_name = &remote,
             .msg_namelen = sizeof(remote),
             .msg_iov = iov,
-            .msg_iovlen = buffer && size ? len : len - 1,
+            .msg_iovlen = sizeof(iov) / sizeof(iovec),
         };
 
         size_t result;

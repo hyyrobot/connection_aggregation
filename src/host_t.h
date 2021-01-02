@@ -49,6 +49,8 @@ namespace autolabor::connection_aggregation
     {
         mutable std::shared_mutex port_mutex, connection_mutex;
 
+        std::atomic_uint16_t id{};
+
         std::unordered_map<uint16_t, in_addr> ports;
         std::unordered_map<connection_key_t, connection_t> connections;
     };
@@ -73,10 +75,11 @@ namespace autolabor::connection_aggregation
     private:
         fd_guard_t _netlink, _tun, _epoll;
         void local_monitor();
+        void forward();
         void device_added(device_index_t, const char *);
         void device_removed(device_index_t);
 
-        size_t send_single(in_addr, connection_key_union, pack_type_t, const uint8_t * = nullptr, size_t = 0);
+        size_t send_single(in_addr, connection_key_union, uint8_t type_offset, uint8_t *, size_t);
 
         char _name[IFNAMSIZ];
         device_index_t _index;

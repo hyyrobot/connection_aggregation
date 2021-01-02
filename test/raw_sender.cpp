@@ -29,10 +29,10 @@ int main()
                 std::cout << host << std::endl;
     }).detach();
 
-    while (true)
+    for (auto i = 0;; ++i)
     {
-        std::cout << "sent: " << host.send_handshake(address) << std::endl;
-        std::this_thread::sleep_for(.5s);
+        std::cout << i << "\tsent: " << host.send_handshake(address) << std::endl;
+        std::this_thread::sleep_for(.1s);
     }
 
     return 0;
