@@ -2,7 +2,6 @@
 
 #include <arpa/inet.h>
 
-#include <vector>
 #include <cstring>
 
 namespace autolabor::connection_aggregation

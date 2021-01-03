@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 project(pm1_sdk LANGUAGES CXX C)
+
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_BUILD_TYPE "Release")
 
 include_directories(src)
 
@@ -31,8 +33,5 @@ find_package(Threads)
 add_executable(service test/service.cpp)
 target_link_libraries(service kernel ${CMAKE_THREAD_LIBS_INIT})
 
-add_executable(send test/raw_sender.cpp)
-target_link_libraries(send kernel ${CMAKE_THREAD_LIBS_INIT})
-
-add_executable(receive test/raw_receiver.cpp)
-target_link_libraries(receive kernel ${CMAKE_THREAD_LIBS_INIT})
+add_executable(send test/udp_sender.cpp)
+add_executable(receive test/udp_receiver.cpp)

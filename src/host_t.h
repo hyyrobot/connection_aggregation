@@ -9,12 +9,17 @@
 
 #include <unordered_map>
 #include <queue>
+#include <vector>
 #include <shared_mutex>
 #include <chrono>
 #include <ostream>
 
 #define READ_LOCK(MUTEX) std::shared_lock<decltype(MUTEX)> MUTEX##_guard(MUTEX)
 #define WRITE_LOCK(MUTEX) std::unique_lock<decltype(MUTEX)> MUTEX##_guard(MUTEX)
+#define TRY_LOCK(MUTEX, WHAT)                                                 \
+    std::unique_lock<decltype(MUTEX)> MUTEX##_guard(MUTEX, std::try_to_lock); \
+    if (!MUTEX##_guard.owns_lock())                                           \
+    WHAT
 
 namespace autolabor::connection_aggregation
 {
@@ -54,8 +59,14 @@ namespace autolabor::connection_aggregation
         std::unordered_map<uint16_t, in_addr> ports;
         std::unordered_map<connection_key_t, connection_t> connections;
 
+        // 获得一个新的发送序号
         uint16_t get_id();
+
+        // 检查接收序号是否已经接收过
         bool check_received(uint16_t);
+
+        // 查找最优连接
+        std::vector<connection_key_t> take_best_connections() const;
 
     private:
         std::atomic_uint16_t _id{};
@@ -78,15 +89,22 @@ namespace autolabor::connection_aggregation
         // 外部使用：添加一个已知的服务器的地址
         void add_remote(in_addr, uint16_t, in_addr);
 
-        // 接收
+        // 接收服务函数
+        // 缓冲区由外部提供，循环在内部
         void receive(uint8_t *, size_t);
+
+        // 转发服务函数
+        // 缓冲区由外部提供，循环在内部
+        void forward(uint8_t *, size_t);
 
         size_t send_handshake(in_addr);
 
     private:
+        std::mutex _receiving, _forwarding;
+
         fd_guard_t _netlink, _tun, _epoll;
         void local_monitor();
-        void forward();
+        void forward_inner(uint8_t *, size_t);
         void device_added(device_index_t, const char *);
         void device_removed(device_index_t);
 

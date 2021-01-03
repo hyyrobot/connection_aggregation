@@ -71,6 +71,9 @@ namespace autolabor::connection_aggregation
 
     void host_t::receive(uint8_t *buffer, size_t size)
     {
+        // 只能在一个线程调用，拿不到锁则放弃
+        TRY_LOCK(_receiving, return );
+
         epoll_event event;
         while (true)
         {
@@ -113,15 +116,21 @@ namespace autolabor::connection_aggregation
                     // 用于去重的连接束序号存在 sum 处
                     if (!type->multiple || s.check_received(ip_->ip_sum))
                     {
-                        // 恢复 ip 包
-                        ip_->ip_v = 4;
-                        ip_->ip_hl = 5;
-                        ip_->ip_tos = 0;
-                        ip_->ip_len = htons(n);
-                        ip_->ip_sum = 0;
-                        ip_->ip_sum = checksum(ip_, sizeof(ip));
-                        // 转发
-                        write(_tun, buffer, n);
+                        if (ip_->ip_dst.s_addr == _address.s_addr)
+                        {
+                            // 恢复 ip 包
+                            ip_->ip_v = 4;
+                            ip_->ip_hl = 5;
+                            ip_->ip_tos = 0;
+                            ip_->ip_len = htons(n);
+                            ip_->ip_sum = 0;
+                            ip_->ip_sum = checksum(ip_, sizeof(ip));
+                            // 转发
+                            if (n != write(_tun, buffer, n))
+                                THROW_ERRNO(__FILE__, __LINE__, "forward msg to tun")
+                        }
+                        else if (--ip_->ip_ttl > 0)
+                            forward_inner(buffer, n);
                     }
                 }
                 else if (type->multiple)

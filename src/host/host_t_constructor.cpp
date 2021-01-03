@@ -35,7 +35,6 @@ namespace autolabor::connection_aggregation
         config_tun(_netlink, _index = wait_tun_index(_netlink, _name), _address);
 
         std::thread([this] { local_monitor(); }).detach();
-        std::thread([this] { forward(); }).detach();
         send_list_request(_netlink);
     }
 

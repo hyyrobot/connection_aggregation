@@ -32,8 +32,21 @@ int main(int argc, char *argv[])
 
     std::cout << host << std::endl;
 
-    uint8_t buffer[65536];
-    host.receive(buffer, sizeof(buffer));
+    auto forwarding = std::thread([&host] {
+        uint8_t buffer[65536];
+        host.forward(buffer, sizeof(buffer));
+    });
+    auto receiving = std::thread([&host] {
+        uint8_t buffer[65536];
+        host.receive(buffer, sizeof(buffer));
+    });
+
+    while (true)
+    {
+        std::string _;
+        std::getchar();
+        std::cout << host << std::endl;
+    }
 
     return 0;
 }
