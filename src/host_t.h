@@ -89,6 +89,9 @@ namespace autolabor::connection_aggregation
         // 外部使用：添加一个已知的服务器的地址
         void add_remote(in_addr, uint16_t, in_addr);
 
+        // 添加路由条目
+        void add_route(in_addr, in_addr, uint8_t);
+
         // 接收服务函数
         // 缓冲区由外部提供，循环在内部
         void receive(uint8_t *, size_t);
@@ -97,7 +100,8 @@ namespace autolabor::connection_aggregation
         // 缓冲区由外部提供，循环在内部
         void forward(uint8_t *, size_t);
 
-        size_t send_handshake(in_addr);
+        // 主动发送握手
+        size_t send_handshake(in_addr, bool = true);
 
     private:
         std::mutex _receiving, _forwarding;
@@ -114,13 +118,25 @@ namespace autolabor::connection_aggregation
         device_index_t _index;
         in_addr _address;
 
-        mutable std::shared_mutex _device_mutex, _srand_mutex;
+        mutable std::shared_mutex
+            _device_mutex,
+            _srand_mutex,
+            _route_mutex;
 
         // 本机网卡
         std::unordered_map<device_index_t, device_t> _devices;
 
         // 远程主机
         std::unordered_map<in_addr_t, srand_t> _srands;
+
+        struct route_item_t
+        {
+            in_addr next;
+            uint8_t length;
+        };
+
+        // 路由表
+        std::unordered_map<in_addr_t, route_item_t> _route;
     };
 
 } // namespace autolabor::connection_aggregation

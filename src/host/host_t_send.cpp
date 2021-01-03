@@ -7,16 +7,25 @@
 
 namespace autolabor::connection_aggregation
 {
-    size_t host_t::send_handshake(in_addr dst)
+    size_t host_t::send_handshake(in_addr dst, bool on_demand)
     {
         std::vector<connection_key_t> keys;
         {
             READ_LOCK(_srand_mutex);
             auto &s = _srands.at(dst.s_addr);
             read_lock l(s.connection_mutex);
-            for (auto &[k, c] : s.connections)
-                if (c.need_handshake())
+            if (on_demand)
+            { // 按需发送握手
+                for (auto &[k, c] : s.connections)
+                    if (c.need_handshake())
+                        keys.push_back(k);
+            }
+            else
+            { // 向所有连接发送握手
+                keys.reserve(s.connections.size());
+                for (auto &[k, _] : s.connections)
                     keys.push_back(k);
+            }
         }
         uint8_t nothing = 0;
         for (auto k : keys)
@@ -62,10 +71,15 @@ namespace autolabor::connection_aggregation
                 continue;
             if (n < 20)
                 THROW_ERRNO(__FILE__, __LINE__, "receive from tun");
-            // 丢弃非 ip v4 包
             auto ip_ = reinterpret_cast<ip *>(buffer);
-            if (ip_->ip_v == 4)
-                forward_inner(buffer, n);
+            // 丢弃非 ip v4 包
+            if (ip_->ip_v != 4)
+                continue;
+            // 回环包直接写回去
+            if (ip_->ip_dst.s_addr == _address.s_addr)
+                write(_tun, buffer, n);
+            // 转发
+            forward_inner(buffer, n);
         }
     }
 
@@ -73,6 +87,7 @@ namespace autolabor::connection_aggregation
     {
         constexpr static pack_type_t TYPE{.multiple = true, .forward = true};
         constexpr static auto PAYLOAD_OFFSET = 4;
+        // 额外信息压入 ip 头部
         // 报头
         //       4       |       4       |       4       |       4       |       4       |       4       |       4       |       4       |
         //    version    | header length |        type of service        |                        total length                           |
@@ -85,7 +100,17 @@ namespace autolabor::connection_aggregation
         //              ttl              |            protocol           |                         id for srand                          |
         auto ip_ = reinterpret_cast<ip *>(buffer);
         auto dst = ip_->ip_dst;
-        // TODO: 检查路由表
+        { // 检查路由表
+            READ_LOCK(_route_mutex);
+            auto p = _route.find(dst.s_addr);
+            // 路由表没有，丢弃
+            if (p == _route.end())
+                return;
+            // 如果不是直连，发往直连路由
+            auto q = p->second;
+            if (q.length)
+                dst = q.next;
+        }
         std::vector<connection_key_t> keys;
         {
             READ_LOCK(_srand_mutex);
