@@ -30,7 +30,10 @@ add_library(kernel
 
 find_package(Threads)
 
-add_executable(service test/service.cpp)
+add_executable(service test/service.cpp
+    test/cin_to_list.h
+    test/cin_to_list.cpp
+)
 target_link_libraries(service kernel ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(send test/udp_sender.cpp)

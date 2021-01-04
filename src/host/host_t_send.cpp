@@ -77,7 +77,7 @@ namespace autolabor::connection_aggregation
                 continue;
             // 回环包直接写回去
             if (ip_->ip_dst.s_addr == _address.s_addr)
-                write(_tun, buffer, n);
+                auto _ = write(_tun, buffer, n);
             // 转发
             forward_inner(buffer, n);
         }
