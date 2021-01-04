@@ -104,6 +104,8 @@ namespace autolabor::connection_aggregation
         size_t send_handshake(in_addr, bool = true);
 
     private:
+        decltype(std::chrono::steady_clock::now()) _t0;
+
         std::mutex _receiving, _forwarding;
 
         fd_guard_t _netlink, _tun, _epoll;

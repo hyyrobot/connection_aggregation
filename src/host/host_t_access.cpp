@@ -49,14 +49,14 @@ namespace autolabor::connection_aggregation
                 {
                     auto buffer = space;
                     auto b = buffer.data();
-                    std::strcpy(b + 3, text);
+                    std::strcpy(b + 2, text);
                     _union.key = k;
                     std::to_string(_union.pair.src_index).copy(b + 22, 5);
                     std::to_string(_union.pair.dst_port).copy(b + 29, 6);
                     {
                         read_lock lll(s.port_mutex);
                         auto a = s.ports.at(_union.pair.dst_port);
-                        inet_ntop(AF_INET, &a, b + 38, 17);
+                        inet_ntop(AF_INET, &a, b + 37, 17);
                     }
                     c.snapshot(&snapshot);
                     b[55] = snapshot.state + '0';

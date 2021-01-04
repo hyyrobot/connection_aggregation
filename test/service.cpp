@@ -135,11 +135,11 @@ int main(int argc, char *argv[])
     }
 
     auto forwarding = std::thread([&host] {
-        uint8_t buffer[65536];
+        uint8_t buffer[2048];
         host.forward(buffer, sizeof(buffer));
     });
     auto receiving = std::thread([&host] {
-        uint8_t buffer[65536];
+        uint8_t buffer[2048];
         host.receive(buffer, sizeof(buffer));
     });
 
