@@ -28,9 +28,9 @@ namespace autolabor::connection_aggregation
             return o;
 
         const static std::string
-            title = "|      host       | index |  port  |     address     | state | input | output |",
-            _____ = "| --------------- | ----- | ------ | --------------- | ----- | ----- | ------ |",
-            space = "|                 |       |        |                 |  -->  |       |        |";
+            title = "|      host       | index |  port  |     address     | state | input | output | counter |",
+            _____ = "| --------------- | ----- | ------ | --------------- | ----- | ----- | ------ | ------- |",
+            space = "|                 |       |        |                 |  -->  |       |        |         |";
         o << std::endl
           << std::endl
           << title << std::endl
@@ -63,6 +63,7 @@ namespace autolabor::connection_aggregation
                     b[59] = snapshot.opposite + '0';
                     std::to_string(snapshot.received).copy(b + 63, 5);
                     std::to_string(snapshot.sent).copy(b + 71, 6);
+                    std::to_string(snapshot.counter).copy(b + 80, 9);
                     for (auto &c : buffer)
                         if (c < ' ')
                             c = ' ';

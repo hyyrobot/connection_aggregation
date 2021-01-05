@@ -12,7 +12,7 @@ namespace autolabor::connection_aggregation
 {
     bool srand_t::check_received(uint16_t id)
     {
-        constexpr static auto timeout = std::chrono::milliseconds(500);
+        constexpr static auto timeout = std::chrono::milliseconds(2000);
 
         std::lock_guard<std::mutex> lock(_id_updater);
         const auto now = std::chrono::steady_clock::now();
@@ -38,7 +38,7 @@ namespace autolabor::connection_aggregation
         }
         else
             return false;
-        while (true)
+        while (!_received_id.empty())
         {
             auto pop = _received_id.front();
             auto qoq = _received_time.find(pop);
