@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
+
 project(pm1_sdk LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
