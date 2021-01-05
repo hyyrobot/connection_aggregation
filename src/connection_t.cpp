@@ -48,27 +48,27 @@ namespace autolabor::connection_aggregation
         // 计数清零
         _counter = 0;
         // 交换判断是否发生升级
-        const auto up = _oppesite.exchange(state) < state;
+        const auto o = _oppesite.exchange(state);
 
         auto s = _state.load();
-        auto loop = true;
-        do
-            switch (s)
-            {
-            case 0: // 只要收到，就证明可以收到
-                loop = !_state.compare_exchange_strong(s, 1);
-                break;
-            case 1: // 如果发现对端升级，证明对端可以收到
-                loop = up && !_state.compare_exchange_strong(s, 2);
-                break;
-            case 2: // 如果发现对端升级，确认对端可以收到
-                loop = up && !_state.compare_exchange_strong(s, 3);
-                break;
-            case 3: // 如果发现对端没有升级两次，证明连接状态有变化（可能丢包率极高或对端已经重启），降级
-                loop = state < 2 && !_state.compare_exchange_strong(s, 1);
-                break;
-            }
-        while (loop);
+        switch (s)
+        {
+        case 0: // 只要收到，就证明可以收到
+            _state.compare_exchange_weak(s, 1);
+            break;
+        case 1: // 如果发现对端升级，证明对端可以收到
+            if (o)
+                _state.compare_exchange_weak(s, 2);
+            break;
+        case 2: // 如果发现对端升级，确认对端可以收到
+            if (state > o)
+                _state.compare_exchange_weak(s, 3);
+            break;
+        case 3: // 如果发现对端没有升级两次，证明连接状态有变化（可能丢包率极高或对端已经重启），降级
+            if (state < 2)
+                _state.compare_exchange_weak(s, 1);
+            break;
+        }
 
         return ++_received;
     }

@@ -2,8 +2,8 @@
 
 #include "../ERRNO_MACRO.h"
 
-#include <unistd.h>
 #include <linux/rtnetlink.h>
+#include <unistd.h>
 
 namespace autolabor::connection_aggregation
 {

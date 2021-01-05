@@ -2,7 +2,6 @@
 
 #include <arpa/inet.h>
 
-#include <vector>
 #include <cstring>
 
 namespace autolabor::connection_aggregation
@@ -29,9 +28,9 @@ namespace autolabor::connection_aggregation
             return o;
 
         const static std::string
-            title = "|      host       | index |  port  |     address     | state | input | output |",
-            _____ = "| --------------- | ----- | ------ | --------------- | ----- | ----- | ------ |",
-            space = "|                 |       |        |                 |  -->  |       |        |";
+            title = "|      host       | index |  port  |     address     | state | input | output | counter |",
+            _____ = "| --------------- | ----- | ------ | --------------- | ----- | ----- | ------ | ------- |",
+            space = "|                 |       |        |                 |  -->  |       |        |         |";
         o << std::endl
           << std::endl
           << title << std::endl
@@ -50,20 +49,21 @@ namespace autolabor::connection_aggregation
                 {
                     auto buffer = space;
                     auto b = buffer.data();
-                    std::strcpy(b + 3, text);
+                    std::strcpy(b + 2, text);
                     _union.key = k;
                     std::to_string(_union.pair.src_index).copy(b + 22, 5);
                     std::to_string(_union.pair.dst_port).copy(b + 29, 6);
                     {
                         read_lock lll(s.port_mutex);
                         auto a = s.ports.at(_union.pair.dst_port);
-                        inet_ntop(AF_INET, &a, b + 38, 17);
+                        inet_ntop(AF_INET, &a, b + 37, 17);
                     }
                     c.snapshot(&snapshot);
                     b[55] = snapshot.state + '0';
                     b[59] = snapshot.opposite + '0';
                     std::to_string(snapshot.received).copy(b + 63, 5);
                     std::to_string(snapshot.sent).copy(b + 71, 6);
+                    std::to_string(snapshot.counter).copy(b + 80, 9);
                     for (auto &c : buffer)
                         if (c < ' ')
                             c = ' ';

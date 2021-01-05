@@ -20,7 +20,8 @@ namespace autolabor::connection_aggregation
         : _address(address),
           _netlink(bind_netlink(RTMGRP_LINK)),
           _tun(open("/dev/net/tun", O_RDWR)),
-          _epoll(epoll_create1(0))
+          _epoll(epoll_create1(0)),
+          _t0(std::chrono::steady_clock::now())
     {
         // 顺序不能变：
         // 1. 注册 TUN
@@ -35,7 +36,6 @@ namespace autolabor::connection_aggregation
         config_tun(_netlink, _index = wait_tun_index(_netlink, _name), _address);
 
         std::thread([this] { local_monitor(); }).detach();
-        std::thread([this] { forward(); }).detach();
         send_list_request(_netlink);
     }
 
