@@ -9,28 +9,36 @@ namespace autolabor::connection_aggregation
 {
     size_t host_t::send_handshake(in_addr dst, bool on_demand)
     {
-        std::vector<connection_key_t> keys;
-        {
-            READ_LOCK(_srand_mutex);
-            auto &s = _srands.at(dst.s_addr);
-            read_lock l(s.connection_mutex);
-            if (on_demand)
-            { // 按需发送握手
-                for (auto &[k, c] : s.connections)
-                    if (c.need_handshake())
-                        keys.push_back(k);
-            }
-            else
-            { // 向所有连接发送握手
-                keys.reserve(s.connections.size());
-                for (auto &[k, _] : s.connections)
-                    keys.push_back(k);
-            }
-        }
         uint8_t nothing = 0;
-        for (auto k : keys)
-            send_single(dst, {.key = k}, &nothing, 1);
-        return keys.size();
+        // 未指定具体目标，向所有邻居发送握手
+        if (!dst.s_addr)
+        {
+            auto sum = 0;
+            READ_LOCK(_srand_mutex);
+            for (auto &[d, s] : _srands)
+            {
+                auto keys = s.filter_for_handshake(on_demand);
+                for (auto k : keys)
+                    send_single({d}, {.key = k}, &nothing, 1);
+                sum += keys.size();
+            }
+            return sum;
+        }
+        // 向指定的邻居发送握手
+        else
+        {
+            std::vector<connection_key_t> keys;
+            {
+                READ_LOCK(_srand_mutex);
+                auto p = _srands.find(dst.s_addr);
+                if (p == _srands.end())
+                    return 0;
+                keys = p->second.filter_for_handshake(on_demand);
+            }
+            for (auto k : keys)
+                send_single(dst, {.key = k}, &nothing, 1);
+            return keys.size();
+        }
     }
 
     uint16_t srand_t::get_id()
@@ -38,7 +46,7 @@ namespace autolabor::connection_aggregation
         return _id++;
     }
 
-    std::vector<connection_key_t> srand_t::take_best_connections() const
+    std::vector<connection_key_t> srand_t::filter_for_forward() const
     {
         std::vector<connection_key_t> result;
         auto max = 0;
@@ -55,6 +63,25 @@ namespace autolabor::connection_aggregation
                 result[0] = k;
             }
             else
+                result.push_back(k);
+        }
+        return result;
+    }
+
+    std::vector<connection_key_t> srand_t::filter_for_handshake(bool on_demand) const
+    {
+        std::vector<connection_key_t> result;
+        read_lock l(connection_mutex);
+        if (on_demand)
+        { // 按需发送握手
+            for (auto &[k, c] : connections)
+                if (c.need_handshake())
+                    result.push_back(k);
+        }
+        else
+        { // 向所有连接发送握手
+            result.reserve(connections.size());
+            for (auto &[k, _] : connections)
                 result.push_back(k);
         }
         return result;
@@ -116,8 +143,9 @@ namespace autolabor::connection_aggregation
             READ_LOCK(_srand_mutex);
             auto &s = _srands.at(dst.s_addr);
             ip_->ip_sum = s.get_id();
-            keys = s.take_best_connections();
+            keys = s.filter_for_forward();
         }
+        ip_->ip_ttl = MAX_TTL;
         *reinterpret_cast<pack_type_t *>(buffer + PAYLOAD_OFFSET) = TYPE;
         for (auto k : keys)
             send_single(dst, {.key = k}, buffer + PAYLOAD_OFFSET, n - PAYLOAD_OFFSET);

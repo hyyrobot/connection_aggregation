@@ -9,24 +9,40 @@
 #include <iostream>
 
 using namespace autolabor::connection_aggregation;
+using namespace std::chrono_literals;
 
-void script(host_t &h, const std::list<std::string> &commands)
+bool script(host_t &h, const std::list<std::string> &commands)
 {
     auto p = commands.begin();
     switch (commands.size())
     {
     case 1:
         if (*p == "view")
+        {
             std::cout << h << std::endl;
-        break;
+            return true;
+        }
+        if (*p == "yell")
+        {
+            std::cout << "sent " << h.send_handshake({}, false) << " packages" << std::endl;
+            std::this_thread::sleep_for(200ms);
+            std::cout << h << std::endl;
+            return true;
+        }
+        return false;
+
     case 2:
         if (*p++ == "shakehand")
         {
             in_addr a{};
             inet_pton(AF_INET, p->data(), &a);
-            h.send_handshake(a);
+            std::cout << "sent " << h.send_handshake(a, false) << " packages" << std::endl;
+            std::this_thread::sleep_for(200ms);
+            std::cout << h << std::endl;
+            return true;
         }
-        break;
+        return false;
+
     case 3:
         if (*p == "bind")
         {
@@ -36,8 +52,10 @@ void script(host_t &h, const std::list<std::string> &commands)
                  ? std::cout << "bind device[" << index << "] with port " << port
                  : std::cout << "bind failed")
                 << std::endl;
+            return true;
         }
-        break;
+        return false;
+
     case 4:
         if (*p == "remote")
         {
@@ -48,8 +66,9 @@ void script(host_t &h, const std::list<std::string> &commands)
             h.add_remote(a0, port, a1);
             p = commands.begin();
             std::cout << "add remote " << *++p << " at " << *++p << ':' << *++p << std::endl;
+            return true;
         }
-        else if (*p == "route")
+        if (*p == "route")
         {
             in_addr a0, a1;
             inet_pton(AF_INET, (++p)->c_str(), &a0);
@@ -58,12 +77,12 @@ void script(host_t &h, const std::list<std::string> &commands)
             h.add_route(a0, a1, distance);
             p = commands.begin();
             std::cout << "add route " << *++p << " via " << *++p << std::endl;
-            break;
+            return true;
         }
-        break;
+        return false;
 
     default:
-        break;
+        return false;
     }
 }
 
@@ -143,7 +162,10 @@ int main(int argc, char *argv[])
         host.receive(buffer, sizeof(buffer));
     });
 
-    cin_to_list([&host](auto commands) { script(host, commands); });
+    cin_to_list([&host](auto commands) {
+        if (!script(host, commands))
+            std::cout << "known command" << std::endl;
+    });
 
     return 0;
 }

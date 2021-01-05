@@ -8,12 +8,28 @@
 
 #include <iostream>
 
+uint16_t static checksum(const void *data, size_t n)
+{
+    auto p = reinterpret_cast<const uint16_t *>(data);
+    uint32_t sum = 0;
+
+    for (; n > 1; n -= 2)
+        sum += *p++;
+
+    if (n)
+        sum += *p;
+
+    p = reinterpret_cast<uint16_t *>(&sum);
+    sum = p[0] + p[1];
+    sum = p[0] + p[1];
+
+    return ~p[0];
+}
+
 namespace autolabor::connection_aggregation
 {
     bool srand_t::check_received(uint16_t id)
     {
-        constexpr static auto timeout = std::chrono::milliseconds(2000);
-
         std::lock_guard<std::mutex> lock(_id_updater);
         const auto now = std::chrono::steady_clock::now();
 
@@ -23,7 +39,7 @@ namespace autolabor::connection_aggregation
             _received_time.emplace(id, now);
             _received_id.push(id);
         }
-        else if (now - p->second > timeout)
+        else if (now - p->second > TIMEOUT)
         {
             p->second = now;
             while (true)
@@ -42,7 +58,7 @@ namespace autolabor::connection_aggregation
         {
             auto pop = _received_id.front();
             auto qoq = _received_time.find(pop);
-            if (now - qoq->second > timeout)
+            if (now - qoq->second > TIMEOUT)
             {
                 _received_id.pop();
                 _received_time.erase(qoq);
@@ -53,31 +69,13 @@ namespace autolabor::connection_aggregation
         return true;
     }
 
-    uint16_t checksum(const void *data, size_t n)
-    {
-        auto p = reinterpret_cast<const uint16_t *>(data);
-        uint32_t sum = 0;
-
-        for (; n > 1; n -= 2)
-            sum += *p++;
-
-        if (n)
-            sum += *p;
-
-        p = reinterpret_cast<uint16_t *>(&sum);
-        sum = p[0] + p[1];
-        sum = p[0] + p[1];
-
-        return ~p[0];
-    }
-
     void host_t::receive(uint8_t *buffer, size_t size)
     {
         // 只能在一个线程调用，拿不到锁则放弃
         TRY_LOCK(_receiving, return );
 
-        auto SOURCE = reinterpret_cast<const in_addr *>(buffer);       // 解出源虚拟地址
-        auto TYPE = reinterpret_cast<const pack_type_t *>(SOURCE + 1); // 解出类型字节
+        const auto SOURCE = reinterpret_cast<const in_addr *>(buffer);       // 解出源虚拟地址
+        const auto TYPE = reinterpret_cast<const pack_type_t *>(SOURCE + 1); // 解出类型字节
 
         // auto t1 = std::chrono::steady_clock::now();
         epoll_event events[8];
@@ -127,8 +125,12 @@ namespace autolabor::connection_aggregation
                         // 用于去重的连接束序号存在 sum 处
                         if (!type.multiple || s.check_received(ip_->ip_sum))
                         {
+                            // 如果目的是本机
                             if (ip_->ip_dst.s_addr == _address.s_addr)
                             {
+                                // 如果经过中转，更新路由表
+                                if (auto distance = MAX_TTL - ip_->ip_ttl)
+                                    add_route(ip_->ip_src, source, distance);
                                 // 恢复 ip 包
                                 ip_->ip_v = 4;
                                 ip_->ip_hl = 5;
@@ -154,4 +156,5 @@ namespace autolabor::connection_aggregation
             }
         }
     }
+
 } // namespace autolabor::connection_aggregation

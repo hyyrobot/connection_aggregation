@@ -4,7 +4,6 @@
 #include "device_t.h"
 #include "connection_t.h"
 
-#include <netinet/in.h>
 #include <linux/if.h>
 
 #include <unordered_map>
@@ -54,6 +53,8 @@ namespace autolabor::connection_aggregation
 
     struct srand_t
     {
+        constexpr static auto TIMEOUT = std::chrono::seconds(2);
+
         mutable std::shared_mutex port_mutex, connection_mutex;
 
         std::unordered_map<uint16_t, in_addr> ports;
@@ -66,7 +67,10 @@ namespace autolabor::connection_aggregation
         bool check_received(uint16_t);
 
         // 查找最优连接
-        std::vector<connection_key_t> take_best_connections() const;
+        std::vector<connection_key_t> filter_for_forward() const;
+
+        // 查找需要握手的连接
+        std::vector<connection_key_t> filter_for_handshake(bool) const;
 
     private:
         std::atomic_uint16_t _id{};
@@ -79,6 +83,8 @@ namespace autolabor::connection_aggregation
 
     struct host_t
     {
+        constexpr static uint8_t MAX_TTL = 16;
+
         host_t(const char *, in_addr);
         friend std::ostream &operator<<(std::ostream &, const host_t &);
 
@@ -101,7 +107,7 @@ namespace autolabor::connection_aggregation
         void forward(uint8_t *, size_t);
 
         // 主动发送握手
-        size_t send_handshake(in_addr, bool = true);
+        size_t send_handshake(in_addr = {}, bool = true);
 
     private:
         decltype(std::chrono::steady_clock::now()) _t0;
@@ -111,6 +117,8 @@ namespace autolabor::connection_aggregation
         fd_guard_t _netlink, _tun, _epoll;
         void local_monitor();
         void forward_inner(uint8_t *, size_t);
+        void receive_inner(device_index_t);
+
         void device_added(device_index_t, const char *);
         void device_removed(device_index_t);
 
