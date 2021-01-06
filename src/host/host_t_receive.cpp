@@ -113,6 +113,12 @@ namespace autolabor::connection_aggregation
                     forward(buffer, n);
                     continue;
                 }
+                // 收到来自 UNIX 的数据报
+                if (events[ei].data.u32 == ID_UNIX)
+                {
+                    read_unix(buffer, size);
+                    continue;
+                }
                 // 收到来自 NETLINK 的数据报
                 if (events[ei].data.u32 == ID_NETLINK)
                 {
@@ -139,7 +145,7 @@ namespace autolabor::connection_aggregation
 
                 const auto source = *SOURCE;
                 const auto type = *TYPE;
-                add_remote(source, remote.sin_port, remote.sin_addr);
+                add_remote_inner(source, remote.sin_port, remote.sin_addr);
                 {
                     READ_LOCK(_srand_mutex);
                     auto &s = _srands.at(source.s_addr);

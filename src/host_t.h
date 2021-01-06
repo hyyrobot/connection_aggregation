@@ -5,6 +5,7 @@
 #include "connection_t.h"
 
 #include <linux/if.h>
+#include <sys/un.h> // sockaddr_un
 
 #include <unordered_map>
 #include <queue>
@@ -83,8 +84,6 @@ namespace autolabor::connection_aggregation
 
     struct host_t
     {
-        constexpr static uint8_t MAX_TTL = 16;
-
         host_t(const char *, in_addr);
         friend std::ostream &operator<<(std::ostream &, const host_t &);
 
@@ -93,9 +92,9 @@ namespace autolabor::connection_aggregation
         bool bind(device_index_t, uint16_t);
 
         // 外部使用：添加一个已知的服务器的地址
-        void add_remote(in_addr, uint16_t, in_addr);
+        void add_remote(in_addr, in_addr, uint16_t);
 
-        // 添加路由条目
+        // 临时：增加静态路由
         void add_route(in_addr, in_addr, uint8_t);
 
         // 接收服务函数
@@ -106,24 +105,52 @@ namespace autolabor::connection_aggregation
         size_t send_handshake(in_addr = {}, bool = true);
 
     private:
+        constexpr static uint8_t
+            MAX_TTL = 16;
         constexpr static uint32_t
             ID_TUN = 1u << 16u,
-            ID_NETLINK = 2u << 16u;
+            ID_UNIX = 2u << 16u,
+            ID_NETLINK = 3u << 16u;
+
+        enum unix_t : uint8_t
+        {
+            ADD_REMOTE,
+        };
+
+        struct msg_remote_t
+        {
+            uint8_t type, zero;
+            uint16_t port;
+            in_addr virtual_, actual_;
+        };
 
         decltype(std::chrono::steady_clock::now()) _t0;
 
         std::mutex _receiving;
 
-        fd_guard_t _netlink, _tun, _epoll;
+        fd_guard_t _netlink, _tun, _unix, _epoll;
 
+        // 向 netlink 发送查询网卡请求
         void send_list_request() const;
+
+        // 解析 unix 消息
+        void read_unix(uint8_t *, size_t);
+
+        // 解析 netlink 消息
         void read_netlink(uint8_t *, size_t);
+
+        // 转发来自 tun 的数据报
         void forward(uint8_t *, size_t);
+
+        void add_remote_inner(in_addr, uint16_t, in_addr);
+        void add_route_inner(in_addr, in_addr, uint8_t);
 
         void device_added(device_index_t, const char *);
         void device_removed(device_index_t);
 
         size_t send_single(in_addr, connection_key_union, uint8_t *, size_t);
+
+        sockaddr_un _address_un;
 
         char _name[IFNAMSIZ];
         device_index_t _index;
@@ -143,7 +170,7 @@ namespace autolabor::connection_aggregation
         struct route_item_t
         {
             in_addr next;
-            uint8_t length;
+            uint8_t distance;
         };
 
         // 路由表

@@ -31,8 +31,5 @@ add_library(kernel
 
 find_package(Threads)
 
-add_executable(service test/service.cpp
-    test/cin_to_list.h
-    test/cin_to_list.cpp
-)
+add_executable(service test/service.cpp)
 target_link_libraries(service kernel ${CMAKE_THREAD_LIBS_INIT})

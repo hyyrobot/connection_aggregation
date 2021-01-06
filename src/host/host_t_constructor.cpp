@@ -11,57 +11,50 @@
 
 namespace autolabor::connection_aggregation
 {
-    fd_guard_t bind_netlink(uint32_t);
-
     host_t::host_t(const char *name, in_addr address)
         : _address(address),
-          _netlink(bind_netlink(RTMGRP_LINK)),
+          _netlink(socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE)),
           _tun(open("/dev/net/tun", O_RDWR)),
+          _unix(socket(AF_UNIX, SOCK_DGRAM, 0)),
+          _address_un{.sun_family = AF_UNIX},
           _epoll(epoll_create1(0)),
           _t0(std::chrono::steady_clock::now())
     {
-        // 顺序不能变：
-        // 1. 注册 TUN
-        void register_tun(const fd_guard_t &, char *);
-        // 2. 获取 TUN index
+        // 绑定 netlink
+        sockaddr_nl netlink{
+            .nl_family = AF_NETLINK,
+            .nl_pid = static_cast<unsigned>(getpid()),
+            .nl_groups = RTMGRP_LINK,
+        };
+        if (::bind(_netlink, reinterpret_cast<sockaddr *>(&netlink), sizeof(netlink)))
+            THROW_ERRNO(__FILE__, __LINE__, "bind netlink")
+        // 创建 tun
+        ifreq request{.ifr_ifru{.ifru_flags = IFF_TUN | IFF_NO_PI}};
+        std::strcpy(request.ifr_name, name);
+        if (ioctl(_tun, TUNSETIFF, (void *)&request) < 0)
+            THROW_ERRNO(__FILE__, __LINE__, "register tun")
+        std::strcpy(_name, request.ifr_name);
+        // 启动 tun 并配置 ip 地址
         uint32_t wait_tun_index(const fd_guard_t &, const char *);
-        // 3. 配置 TUN
         void config_tun(const fd_guard_t &, uint32_t, in_addr);
-
-        std::strcpy(_name, name);
-        register_tun(_tun, _name);
         config_tun(_netlink, _index = wait_tun_index(_netlink, _name), _address);
-
+        // 绑定本机控制接口
+        std::strcpy(_address_un.sun_path, _name);
+        std::strcpy(_address_un.sun_path + std::strlen(_name), ".interface");
+        if (::bind(_unix, reinterpret_cast<sockaddr *>(&_address_un), sizeof(sockaddr_un)))
+            THROW_ERRNO(__FILE__, __LINE__, "bind unix")
         // 注册 tun 到 epoll
         epoll_event event{.events = EPOLLIN, .data{.u32 = ID_TUN}};
         if (epoll_ctl(_epoll, EPOLL_CTL_ADD, _tun, &event))
             THROW_ERRNO(__FILE__, __LINE__, "add tun to epoll");
+        // 注册 unix 到 epoll
+        event.data.u32 = ID_UNIX;
+        if (epoll_ctl(_epoll, EPOLL_CTL_ADD, _unix, &event))
+            THROW_ERRNO(__FILE__, __LINE__, "add unix to epoll");
         // 注册 netlink 到 epoll
         event.data.u32 = ID_NETLINK;
         if (epoll_ctl(_epoll, EPOLL_CTL_ADD, _netlink, &event))
             THROW_ERRNO(__FILE__, __LINE__, "add netlink to epoll");
-    }
-
-    fd_guard_t bind_netlink(uint32_t group)
-    {
-        fd_guard_t fd(socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE));
-        const sockaddr_nl local{
-            .nl_family = AF_NETLINK,
-            .nl_pid = static_cast<unsigned>(getpid()),
-            .nl_groups = group,
-        };
-        if (bind(fd, reinterpret_cast<const sockaddr *>(&local), sizeof(local)))
-            THROW_ERRNO(__FILE__, __LINE__, "bind netlink")
-        return fd;
-    }
-
-    void register_tun(const fd_guard_t &fd, char *name)
-    {
-        ifreq request{.ifr_ifru{.ifru_flags = IFF_TUN | IFF_NO_PI}};
-        std::strcpy(request.ifr_name, name);
-        if (ioctl(fd, TUNSETIFF, (void *)&request) < 0)
-            THROW_ERRNO(__FILE__, __LINE__, "register tun")
-        std::strcpy(name, request.ifr_name);
     }
 
     uint32_t wait_tun_index(const fd_guard_t &fd, const char *name)

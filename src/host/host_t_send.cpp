@@ -112,7 +112,7 @@ namespace autolabor::connection_aggregation
                 return;
             // 如果不是直连，发往直连路由
             auto q = p->second;
-            if (q.length)
+            if (q.distance)
                 dst = q.next;
         }
         std::vector<connection_key_t> keys;

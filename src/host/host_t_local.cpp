@@ -101,4 +101,14 @@ namespace autolabor::connection_aggregation
             }
     }
 
+    void host_t::read_unix(uint8_t *buffer, size_t size)
+    {
+        auto n = read(_unix, buffer, size);
+        if (buffer[0] == ADD_REMOTE && n == sizeof(msg_remote_t))
+        {
+            auto msg = reinterpret_cast<msg_remote_t *>(buffer);
+            add_remote_inner(msg->virtual_, msg->port, msg->actual_);
+        }
+    }
+
 } // namespace autolabor::connection_aggregation

@@ -1,8 +1,27 @@
 #include "../host_t.h"
 
+#include <netinet/ip.h>
+
 namespace autolabor::connection_aggregation
 {
-    void host_t::add_remote(in_addr remote_host, uint16_t port, in_addr address)
+    void host_t::add_remote(in_addr virtual_, in_addr actual_, uint16_t port)
+    {
+        fd_guard_t temp = socket(AF_UNIX, SOCK_DGRAM, 0);
+        msg_remote_t msg{
+            .type = ADD_REMOTE,
+            .port = port,
+            .virtual_ = virtual_,
+            .actual_ = actual_,
+        };
+        sendto(temp, &msg, sizeof(msg_remote_t), MSG_WAITALL, reinterpret_cast<sockaddr *>(&_address_un), sizeof(sockaddr_un));
+    }
+
+    void host_t::add_route(in_addr dst, in_addr next, uint8_t distance)
+    {
+        add_route_inner(dst, next, distance);
+    }
+
+    void host_t::add_remote_inner(in_addr remote_host, uint16_t port, in_addr address)
     {
         { // 增加远程对象
             WRITE_LOCK(_srand_mutex);
@@ -39,9 +58,9 @@ namespace autolabor::connection_aggregation
         }
     }
 
-    void host_t::add_route(in_addr dst, in_addr next, uint8_t length)
+    void host_t::add_route_inner(in_addr dst, in_addr next, uint8_t distance)
     {
-        if (!length)
+        if (!distance)
             throw std::runtime_error("to add direct route, use add remote instead");
         {
             READ_LOCK(_srand_mutex);
@@ -52,8 +71,8 @@ namespace autolabor::connection_aggregation
             WRITE_LOCK(_route_mutex);
             auto [p, b] = _route.try_emplace(dst.s_addr);
             // 没见过的目的地址，或旧的路由不如新的好
-            if (b || p->second.length >= length)
-                p->second = {.next = next, .length = length};
+            if (b || p->second.distance >= distance)
+                p->second = {.next = next, .distance = distance};
         }
     }
 

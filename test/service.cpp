@@ -1,15 +1,83 @@
 #include "host_t.h"
-#include "cin_to_list.h"
 
 #include <arpa/inet.h>
-#include <cstring>
 #include <list>
 #include <thread>
 #include <iostream>
 #include <sstream>
+#include <functional>
 
 using namespace autolabor::connection_aggregation;
 using namespace std::chrono_literals;
+
+using func_t = std::function<bool(std::list<std::string>)>;
+func_t operator<<(func_t, std::istream &);
+
+bool script(host_t &, const std::list<std::string> &);
+
+int main(int argc, char *argv[])
+{
+    std::cout << argc << " arguments:" << std::endl;
+    for (auto i = 0; i < argc; ++i)
+        std::cout << "  " << i << ": " << argv[i] << std::endl;
+    std::cout << std::endl;
+
+    if (argc < 3)
+        return 1;
+
+    in_addr address;
+    inet_pton(AF_INET, argv[2], &address);
+    host_t h(argv[1], address);
+
+    std::thread([&h] {
+        uint8_t buffer[4096];
+        h.receive(buffer, sizeof(buffer));
+    }).detach();
+
+    std::stringstream builder;
+    for (auto i = 3; i < argc; ++i)
+        builder << argv[i] << ' ';
+
+    [&h](auto c) { return script(h, c); } << builder << std::cin;
+
+    return 0;
+}
+
+func_t operator<<(func_t func, std::istream &in)
+{
+    std::list<std::string> commands;
+    std::string c;
+
+    while (true)
+    {
+        // 逐词解析
+        if (!(in >> c))
+            return func;
+        while (true)
+        {
+            // 分号断句
+            auto x = c.find(';');
+            // 句子未完
+            if (x >= c.size())
+            {
+                commands.push_back(c);
+                break;
+            }
+            // 句子完结
+            if (x > 0)
+                commands.push_back(c.substr(0, x));
+            // 响应
+            if (!func(std::move(commands)))
+                return func;
+            commands.clear();
+            // 恢复剩余成分继续解析
+            if (x + 1 < c.size())
+                c = c.substr(x + 1);
+            else
+                break;
+        }
+    }
+}
 
 bool script(host_t &h, const std::list<std::string> &commands)
 {
@@ -31,8 +99,7 @@ bool script(host_t &h, const std::list<std::string> &commands)
             std::cout << h << std::endl;
             return true;
         }
-        std::cout << "known command" << std::endl;
-        return true;
+        break;
 
     case 2:
         if (*p++ == "shakehand")
@@ -44,8 +111,7 @@ bool script(host_t &h, const std::list<std::string> &commands)
             std::cout << h << std::endl;
             return true;
         }
-        std::cout << "known command" << std::endl;
-        return true;
+        break;
 
     case 3:
         if (*p == "bind")
@@ -58,8 +124,7 @@ bool script(host_t &h, const std::list<std::string> &commands)
                 << std::endl;
             return true;
         }
-        std::cout << "known command" << std::endl;
-        return true;
+        break;
 
     case 4:
         if (*p == "remote")
@@ -68,7 +133,7 @@ bool script(host_t &h, const std::list<std::string> &commands)
             inet_pton(AF_INET, (++p)->c_str(), &a0);
             inet_pton(AF_INET, (++p)->c_str(), &a1);
             auto port = std::stod(*++p);
-            h.add_remote(a0, port, a1);
+            h.add_remote(a0, a1, port);
             p = commands.begin();
             std::cout << "add remote " << *++p << " at " << *++p << ':' << *++p << std::endl;
             return true;
@@ -84,40 +149,8 @@ bool script(host_t &h, const std::list<std::string> &commands)
             std::cout << "add route " << *++p << " via " << *++p << std::endl;
             return true;
         }
-        std::cout << "known command" << std::endl;
-        return true;
-
-    default:
-        std::cout << "known command" << std::endl;
-        return true;
+        break;
     }
-}
-
-int main(int argc, char *argv[])
-{
-    std::cout << argc << " arguments:" << std::endl;
-    for (auto i = 0; i < argc; ++i)
-        std::cout << "  " << i << ": " << argv[i] << std::endl;
-    std::cout << std::endl;
-
-    if (argc < 3)
-        return 1;
-
-    in_addr address;
-    inet_pton(AF_INET, argv[2], &address);
-    host_t host(argv[1], address);
-
-    std::thread([&host] {
-        uint8_t buffer[4096];
-        host.receive(buffer, sizeof(buffer));
-    }).detach();
-
-    std::stringstream builder;
-    for (auto i = 3; i < argc; ++i)
-        builder << argv[i] << ' ';
-        
-    stream_to_list(builder, [&host](auto commands) { return script(host, commands); });
-    stream_to_list(std::cin, [&host](auto commands) { return script(host, commands); });
-
-    return 0;
+    std::cout << "known command" << std::endl;
+    return true;
 }
