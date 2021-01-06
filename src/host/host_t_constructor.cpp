@@ -9,12 +9,9 @@
 #include <linux/rtnetlink.h>
 #include <linux/if_tun.h>
 
-#include <thread>
-
 namespace autolabor::connection_aggregation
 {
     fd_guard_t bind_netlink(uint32_t);
-    void send_list_request(const fd_guard_t &);
 
     host_t::host_t(const char *name, in_addr address)
         : _address(address),
@@ -35,8 +32,14 @@ namespace autolabor::connection_aggregation
         register_tun(_tun, _name);
         config_tun(_netlink, _index = wait_tun_index(_netlink, _name), _address);
 
-        std::thread([this] { local_monitor(); }).detach();
-        send_list_request(_netlink);
+        // 注册 tun 到 epoll
+        epoll_event event{.events = EPOLLIN, .data{.u32 = ID_TUN}};
+        if (epoll_ctl(_epoll, EPOLL_CTL_ADD, _tun, &event))
+            THROW_ERRNO(__FILE__, __LINE__, "add tun to epoll");
+        // 注册 netlink 到 epoll
+        event.data.u32 = ID_NETLINK;
+        if (epoll_ctl(_epoll, EPOLL_CTL_ADD, _netlink, &event))
+            THROW_ERRNO(__FILE__, __LINE__, "add netlink to epoll");
     }
 
     fd_guard_t bind_netlink(uint32_t group)
@@ -146,7 +149,7 @@ namespace autolabor::connection_aggregation
             THROW_ERRNO(__FILE__, __LINE__, "set ip to tun")
     }
 
-    void send_list_request(const fd_guard_t &netlink)
+    void host_t::send_list_request() const
     {
         const struct
         {
@@ -163,7 +166,7 @@ namespace autolabor::connection_aggregation
                 .rtgen_family = AF_UNSPEC,
             },
         };
-        if (sendto(netlink, &request, sizeof(request), MSG_WAITALL,
+        if (sendto(_netlink, &request, sizeof(request), MSG_WAITALL,
                    reinterpret_cast<const sockaddr *>(&KERNEL), sizeof(KERNEL)) <= 0)
             THROW_ERRNO(__FILE__, __LINE__, "get links")
     }

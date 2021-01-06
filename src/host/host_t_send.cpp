@@ -87,30 +87,7 @@ namespace autolabor::connection_aggregation
         return result;
     }
 
-    void host_t::forward(uint8_t *buffer, size_t size)
-    {
-        // 只能在一个线程调用，拿不到锁则放弃
-        TRY_LOCK(_forwarding, return );
-        while (true)
-        {
-            auto n = read(_tun, buffer, size);
-            if (n == 0)
-                continue;
-            if (n < 20)
-                THROW_ERRNO(__FILE__, __LINE__, "receive from tun");
-            auto ip_ = reinterpret_cast<ip *>(buffer);
-            // 丢弃非 ip v4 包
-            if (ip_->ip_v != 4)
-                continue;
-            // 回环包直接写回去
-            if (ip_->ip_dst.s_addr == _address.s_addr)
-                auto _ = write(_tun, buffer, n);
-            // 转发
-            forward_inner(buffer, n);
-        }
-    }
-
-    void host_t::forward_inner(uint8_t *buffer, size_t n)
+    void host_t::forward(uint8_t *buffer, size_t n)
     {
         constexpr static pack_type_t TYPE{.multiple = true, .forward = true};
         constexpr static auto PAYLOAD_OFFSET = 4;

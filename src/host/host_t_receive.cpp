@@ -73,6 +73,7 @@ namespace autolabor::connection_aggregation
     {
         // 只能在一个线程调用，拿不到锁则放弃
         TRY_LOCK(_receiving, return );
+        send_list_request();
 
         const auto SOURCE = reinterpret_cast<const in_addr *>(buffer);       // 解出源虚拟地址
         const auto TYPE = reinterpret_cast<const pack_type_t *>(SOURCE + 1); // 解出类型字节
@@ -92,7 +93,33 @@ namespace autolabor::connection_aggregation
                 THROW_ERRNO(__FILE__, __LINE__, "wait epoll");
             for (auto ei = 0; ei < event_count; ++ei)
             {
-                // 接收
+                // 收到来自 TUN 的数据报
+                if (events[ei].data.u32 == ID_TUN)
+                {
+                    auto n = read(_tun, buffer, size);
+                    if (n == 0)
+                        continue;
+                    // 来自网络层的报文不可能不包含一个头
+                    if (n < sizeof(ip))
+                        THROW_ERRNO(__FILE__, __LINE__, "receive from tun");
+                    auto ip_ = reinterpret_cast<ip *>(buffer);
+                    // 丢弃非 ip v4 包
+                    if (ip_->ip_v != 4)
+                        continue;
+                    // 回环包直接写回去
+                    if (ip_->ip_dst.s_addr == _address.s_addr)
+                        auto _ = write(_tun, buffer, n);
+                    // 转发
+                    forward(buffer, n);
+                    continue;
+                }
+                // 收到来自 NETLINK 的数据报
+                if (events[ei].data.u32 == ID_NETLINK)
+                {
+                    read_netlink(buffer, size);
+                    continue;
+                }
+                // 收到来自其他套接字的数据报
                 auto index = static_cast<device_index_t>(events[ei].data.u32);
                 sockaddr_in remote{.sin_family = AF_INET};
                 iovec iov{.iov_base = buffer, .iov_len = size};
@@ -143,7 +170,7 @@ namespace autolabor::connection_aggregation
                                     THROW_ERRNO(__FILE__, __LINE__, "forward msg to tun")
                             }
                             else if (--ip_->ip_ttl)
-                                forward_inner(buffer, n);
+                                forward(buffer, n);
                         }
                     }
                     else if (type.multiple)

@@ -36,6 +36,3 @@ add_executable(service test/service.cpp
     test/cin_to_list.cpp
 )
 target_link_libraries(service kernel ${CMAKE_THREAD_LIBS_INIT})
-
-add_executable(send test/udp_sender.cpp)
-add_executable(receive test/udp_receiver.cpp)

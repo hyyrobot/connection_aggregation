@@ -153,14 +153,10 @@ int main(int argc, char *argv[])
             }
     }
 
-    auto forwarding = std::thread([&host] {
-        uint8_t buffer[2048];
-        host.forward(buffer, sizeof(buffer));
-    });
-    auto receiving = std::thread([&host] {
-        uint8_t buffer[2048];
+    std::thread([&host] {
+        uint8_t buffer[4096];
         host.receive(buffer, sizeof(buffer));
-    });
+    }).detach();
 
     cin_to_list([&host](auto commands) {
         if (!script(host, commands))

@@ -102,22 +102,23 @@ namespace autolabor::connection_aggregation
         // 缓冲区由外部提供，循环在内部
         void receive(uint8_t *, size_t);
 
-        // 转发服务函数
-        // 缓冲区由外部提供，循环在内部
-        void forward(uint8_t *, size_t);
-
         // 主动发送握手
         size_t send_handshake(in_addr = {}, bool = true);
 
     private:
+        constexpr static uint32_t
+            ID_TUN = 1u << 16u,
+            ID_NETLINK = 2u << 16u;
+
         decltype(std::chrono::steady_clock::now()) _t0;
 
-        std::mutex _receiving, _forwarding;
+        std::mutex _receiving;
 
         fd_guard_t _netlink, _tun, _epoll;
-        void local_monitor();
-        void forward_inner(uint8_t *, size_t);
-        void receive_inner(device_index_t);
+
+        void send_list_request() const;
+        void read_netlink(uint8_t *, size_t);
+        void forward(uint8_t *, size_t);
 
         void device_added(device_index_t, const char *);
         void device_removed(device_index_t);
