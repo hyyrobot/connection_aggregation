@@ -3,10 +3,10 @@
 
 #include <arpa/inet.h>
 #include <cstring>
-#include <string>
 #include <list>
 #include <thread>
 #include <iostream>
+#include <sstream>
 
 using namespace autolabor::connection_aggregation;
 using namespace std::chrono_literals;
@@ -17,6 +17,8 @@ bool script(host_t &h, const std::list<std::string> &commands)
     switch (commands.size())
     {
     case 1:
+        if (*p == "exit")
+            return false;
         if (*p == "view")
         {
             std::cout << h << std::endl;
@@ -29,7 +31,8 @@ bool script(host_t &h, const std::list<std::string> &commands)
             std::cout << h << std::endl;
             return true;
         }
-        return false;
+        std::cout << "known command" << std::endl;
+        return true;
 
     case 2:
         if (*p++ == "shakehand")
@@ -41,7 +44,8 @@ bool script(host_t &h, const std::list<std::string> &commands)
             std::cout << h << std::endl;
             return true;
         }
-        return false;
+        std::cout << "known command" << std::endl;
+        return true;
 
     case 3:
         if (*p == "bind")
@@ -54,7 +58,8 @@ bool script(host_t &h, const std::list<std::string> &commands)
                 << std::endl;
             return true;
         }
-        return false;
+        std::cout << "known command" << std::endl;
+        return true;
 
     case 4:
         if (*p == "remote")
@@ -79,10 +84,12 @@ bool script(host_t &h, const std::list<std::string> &commands)
             std::cout << "add route " << *++p << " via " << *++p << std::endl;
             return true;
         }
-        return false;
+        std::cout << "known command" << std::endl;
+        return true;
 
     default:
-        return false;
+        std::cout << "known command" << std::endl;
+        return true;
     }
 }
 
@@ -100,68 +107,17 @@ int main(int argc, char *argv[])
     inet_pton(AF_INET, argv[2], &address);
     host_t host(argv[1], address);
 
-    enum
-    {
-        none,
-        bind,
-        remote,
-        route
-    } state = none;
-    for (auto p = argv + 3; p < argv + argc; ++p)
-    {
-        if (std::strcmp(*p, "bind") == 0)
-            state = bind;
-        else if (std::strcmp(*p, "remote") == 0)
-            state = remote;
-        else if (std::strcmp(*p, "route") == 0)
-            state = route;
-        else
-            switch (state)
-            {
-            case none:
-                std::cout << "Argument " << *p << " is ignored." << std::endl;
-                break;
-            case bind:
-            {
-                auto index = std::stod(*p++);
-                auto port = std::stod(*p);
-                while (!host.bind(index, port))
-                    std::this_thread::sleep_for(std::chrono::microseconds(100));
-                std::cout << "bind device[" << index << "] with port " << port << std::endl;
-                break;
-            }
-            case remote:
-            {
-                in_addr a0, a1;
-                inet_pton(AF_INET, *p++, &a0);
-                inet_pton(AF_INET, *p++, &a1);
-                auto port = std::stod(*p);
-                host.add_remote(a0, port, a1);
-                std::cout << "add remote " << p[-2] << " at " << p[-1] << ':' << *p << std::endl;
-                break;
-            }
-            case route:
-            {
-                in_addr a0, a1;
-                inet_pton(AF_INET, *p++, &a0);
-                inet_pton(AF_INET, *p++, &a1);
-                auto distance = std::stod(*p);
-                host.add_route(a0, a1, distance);
-                std::cout << "add route " << p[-2] << " via " << p[-1] << std::endl;
-                break;
-            }
-            }
-    }
-
     std::thread([&host] {
         uint8_t buffer[4096];
         host.receive(buffer, sizeof(buffer));
     }).detach();
 
-    cin_to_list([&host](auto commands) {
-        if (!script(host, commands))
-            std::cout << "known command" << std::endl;
-    });
+    std::stringstream builder;
+    for (auto i = 3; i < argc; ++i)
+        builder << argv[i] << ' ';
+        
+    stream_to_list(builder, [&host](auto commands) { return script(host, commands); });
+    stream_to_list(std::cin, [&host](auto commands) { return script(host, commands); });
 
     return 0;
 }

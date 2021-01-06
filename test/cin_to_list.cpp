@@ -1,21 +1,16 @@
 #include "cin_to_list.h"
 
 #include <string>
-#include <iostream>
 
-void cin_to_list(const std::function<void(std::list<std::string> &&)> &func)
+void stream_to_list(std::istream &in, const std::function<bool(std::list<std::string> &&)> &func)
 {
     std::list<std::string> commands;
 
     while (true)
     {
-        if (commands.empty())
-        {
-            std::cout << ">> ";
-            std::cout.flush();
-        }
         std::string c;
-        std::cin >> c;
+        if (!(in >> c))
+            return;
         while (true)
         {
             auto x = c.find(';');
@@ -26,7 +21,8 @@ void cin_to_list(const std::function<void(std::list<std::string> &&)> &func)
             }
             if (x > 0)
                 commands.push_back(c.substr(0, x));
-            func(std::move(commands));
+            if (!func(std::move(commands)))
+                return;
             commands.clear();
             if (x + 1 < c.size())
                 c = c.substr(x + 1);

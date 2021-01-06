@@ -4,7 +4,8 @@
 #include <string>
 #include <list>
 #include <functional>
+#include <istream>
 
-void cin_to_list(const std::function<void(std::list<std::string> &&)> &);
+void stream_to_list(std::istream &, const std::function<bool(std::list<std::string> &&)> &);
 
 #endif // COMMAND_PARSER_H
