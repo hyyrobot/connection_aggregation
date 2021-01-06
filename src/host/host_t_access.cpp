@@ -6,6 +6,13 @@
 
 namespace autolabor::connection_aggregation
 {
+    void host_t::print()
+    {
+        constexpr static uint8_t msg = VIEW;
+        fd_guard_t temp(socket(AF_UNIX, SOCK_DGRAM, 0));
+        sendto(temp, &msg, sizeof(msg), MSG_WAITALL, reinterpret_cast<sockaddr *>(&_address_un), sizeof(sockaddr_un));
+    }
+
     std::ostream &operator<<(std::ostream &o, const host_t &host)
     {
         char text[16];
@@ -38,37 +45,33 @@ namespace autolabor::connection_aggregation
 
         connection_key_union _union;
         connection_t::snapshot_t snapshot;
+        for (auto &[a, s] : host._srands)
         {
-            read_lock l(host._srand_mutex);
-
-            for (auto &[a, s] : host._srands)
+            inet_ntop(AF_INET, &a, text, sizeof(text));
+            read_lock ll(s.connection_mutex);
+            for (const auto &[k, c] : s.connections)
             {
-                inet_ntop(AF_INET, &a, text, sizeof(text));
-                read_lock ll(s.connection_mutex);
-                for (const auto &[k, c] : s.connections)
+                auto buffer = space;
+                auto b = buffer.data();
+                std::strcpy(b + 2, text);
+                _union.key = k;
+                std::to_string(_union.pair.src_index).copy(b + 22, 5);
+                std::to_string(_union.pair.dst_port).copy(b + 29, 6);
                 {
-                    auto buffer = space;
-                    auto b = buffer.data();
-                    std::strcpy(b + 2, text);
-                    _union.key = k;
-                    std::to_string(_union.pair.src_index).copy(b + 22, 5);
-                    std::to_string(_union.pair.dst_port).copy(b + 29, 6);
-                    {
-                        read_lock lll(s.port_mutex);
-                        auto a = s.ports.at(_union.pair.dst_port);
-                        inet_ntop(AF_INET, &a, b + 37, 17);
-                    }
-                    c.snapshot(&snapshot);
-                    b[55] = snapshot.state + '0';
-                    b[59] = snapshot.opposite + '0';
-                    std::to_string(snapshot.received).copy(b + 63, 5);
-                    std::to_string(snapshot.sent).copy(b + 71, 6);
-                    std::to_string(snapshot.counter).copy(b + 80, 9);
-                    for (auto &c : buffer)
-                        if (c < ' ')
-                            c = ' ';
-                    o << buffer << std::endl;
+                    read_lock lll(s.port_mutex);
+                    auto a = s.ports.at(_union.pair.dst_port);
+                    inet_ntop(AF_INET, &a, b + 37, 17);
                 }
+                c.snapshot(&snapshot);
+                b[55] = snapshot.state + '0';
+                b[59] = snapshot.opposite + '0';
+                std::to_string(snapshot.received).copy(b + 63, 5);
+                std::to_string(snapshot.sent).copy(b + 71, 6);
+                std::to_string(snapshot.counter).copy(b + 80, 9);
+                for (auto &c : buffer)
+                    if (c < ' ')
+                        c = ' ';
+                o << buffer << std::endl;
             }
         }
 

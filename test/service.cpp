@@ -89,12 +89,12 @@ bool script(host_t &h, const std::list<std::string> &commands)
             return false;
         if (*p == "view")
         {
-            std::cout << h << std::endl;
+            h.print();
             return true;
         }
         if (*p == "yell")
         {
-            std::cout << "sent " << h.send_handshake({}, false) << " packages" << std::endl;
+            h.yell();
             std::this_thread::sleep_for(200ms);
             std::cout << h << std::endl;
             return true;
@@ -106,7 +106,7 @@ bool script(host_t &h, const std::list<std::string> &commands)
         {
             in_addr a{};
             inet_pton(AF_INET, p->data(), &a);
-            std::cout << "sent " << h.send_handshake(a, false) << " packages" << std::endl;
+            h.yell(a);
             std::this_thread::sleep_for(200ms);
             std::cout << h << std::endl;
             return true;

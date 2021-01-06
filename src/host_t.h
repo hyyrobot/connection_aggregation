@@ -102,7 +102,9 @@ namespace autolabor::connection_aggregation
         void receive(uint8_t *, size_t);
 
         // 主动发送握手
-        size_t send_handshake(in_addr = {}, bool = true);
+        void yell(in_addr = {});
+
+        void print();
 
     private:
         constexpr static uint8_t
@@ -114,6 +116,9 @@ namespace autolabor::connection_aggregation
 
         enum unix_t : uint8_t
         {
+            VIEW = 8,
+            YELL,
+            SEND_HANDSHAKE,
             ADD_REMOTE,
         };
 
@@ -142,6 +147,7 @@ namespace autolabor::connection_aggregation
         // 转发来自 tun 的数据报
         void forward(uint8_t *, size_t);
 
+        void send_void(in_addr, bool);
         void add_remote_inner(in_addr, uint16_t, in_addr);
         void add_route_inner(in_addr, in_addr, uint8_t);
 
@@ -158,7 +164,6 @@ namespace autolabor::connection_aggregation
 
         mutable std::shared_mutex
             _device_mutex,
-            _srand_mutex,
             _route_mutex;
 
         // 本机网卡

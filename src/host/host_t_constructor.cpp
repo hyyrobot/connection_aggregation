@@ -41,6 +41,7 @@ namespace autolabor::connection_aggregation
         // 绑定本机控制接口
         std::strcpy(_address_un.sun_path, _name);
         std::strcpy(_address_un.sun_path + std::strlen(_name), ".interface");
+        unlink(_address_un.sun_path);
         if (::bind(_unix, reinterpret_cast<sockaddr *>(&_address_un), sizeof(sockaddr_un)))
             THROW_ERRNO(__FILE__, __LINE__, "bind unix")
         // 注册 tun 到 epoll

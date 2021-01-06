@@ -7,37 +7,37 @@
 
 namespace autolabor::connection_aggregation
 {
-    size_t host_t::send_handshake(in_addr dst, bool on_demand)
+    void host_t::yell(in_addr dst)
+    {
+        fd_guard_t temp = socket(AF_UNIX, SOCK_DGRAM, 0);
+        if (!dst.s_addr)
+        {
+            constexpr static uint8_t msg = YELL;
+            sendto(temp, &msg, sizeof(msg), MSG_WAITALL, reinterpret_cast<sockaddr *>(&_address_un), sizeof(sockaddr_un));
+        }
+        else
+        {
+            uint8_t msg[5]{SEND_HANDSHAKE};
+            *reinterpret_cast<in_addr *>(msg + 1) = dst;
+            sendto(temp, &msg, sizeof(msg), MSG_WAITALL, reinterpret_cast<sockaddr *>(&_address_un), sizeof(sockaddr_un));
+        }
+    }
+
+    void host_t::send_void(in_addr dst, bool on_demand)
     {
         uint8_t nothing = 0;
         // 未指定具体目标，向所有邻居发送握手
         if (!dst.s_addr)
-        {
-            auto sum = 0;
-            READ_LOCK(_srand_mutex);
             for (auto &[d, s] : _srands)
-            {
-                auto keys = s.filter_for_handshake(on_demand);
-                for (auto k : keys)
+                for (auto k : s.filter_for_handshake(on_demand))
                     send_single({d}, {.key = k}, &nothing, 1);
-                sum += keys.size();
-            }
-            return sum;
-        }
         // 向指定的邻居发送握手
         else
         {
-            std::vector<connection_key_t> keys;
-            {
-                READ_LOCK(_srand_mutex);
-                auto p = _srands.find(dst.s_addr);
-                if (p == _srands.end())
-                    return 0;
-                keys = p->second.filter_for_handshake(on_demand);
-            }
-            for (auto k : keys)
-                send_single(dst, {.key = k}, &nothing, 1);
-            return keys.size();
+            auto p = _srands.find(dst.s_addr);
+            if (p != _srands.end())
+                for (auto k : p->second.filter_for_handshake(on_demand))
+                    send_single(dst, {.key = k}, &nothing, 1);
         }
     }
 
@@ -115,16 +115,13 @@ namespace autolabor::connection_aggregation
             if (q.distance)
                 dst = q.next;
         }
-        std::vector<connection_key_t> keys;
-        {
-            READ_LOCK(_srand_mutex);
-            auto &s = _srands.at(dst.s_addr);
-            ip_->ip_sum = s.get_id();
-            keys = s.filter_for_forward();
-        }
+
+        auto &s = _srands.at(dst.s_addr);
+        ip_->ip_sum = s.get_id();
         ip_->ip_ttl = MAX_TTL;
         *reinterpret_cast<pack_type_t *>(buffer + PAYLOAD_OFFSET) = TYPE;
-        for (auto k : keys)
+
+        for (auto k : s.filter_for_forward())
             send_single(dst, {.key = k}, buffer + PAYLOAD_OFFSET, n - PAYLOAD_OFFSET);
     }
 
@@ -135,17 +132,15 @@ namespace autolabor::connection_aggregation
             .sin_family = AF_INET,
             .sin_port = _union.pair.dst_port,
         };
-        { // 获取目的地址和连接状态
-            READ_LOCK(_srand_mutex);
-            auto &s = _srands.at(dst.s_addr);
-            {
-                read_lock l(s.port_mutex);
-                remote.sin_addr = s.ports.at(remote.sin_port);
-            }
-            {
-                read_lock l(s.connection_mutex);
-                type->state = s.connections.at(_union.key).state();
-            }
+        // 获取目的地址和连接状态
+        auto &s = _srands.at(dst.s_addr);
+        {
+            read_lock l(s.port_mutex);
+            remote.sin_addr = s.ports.at(remote.sin_port);
+        }
+        {
+            read_lock l(s.connection_mutex);
+            type->state = s.connections.at(_union.key).state();
         }
 
         iovec iov[]{
@@ -166,7 +161,6 @@ namespace autolabor::connection_aggregation
         }
         if (result > 0)
         {
-            READ_LOCK(_srand_mutex);
             auto &s = _srands.at(dst.s_addr);
             read_lock l(s.connection_mutex);
             s.connections.at(_union.key).sent_once();

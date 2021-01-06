@@ -147,7 +147,6 @@ namespace autolabor::connection_aggregation
                 const auto type = *TYPE;
                 add_remote_inner(source, remote.sin_port, remote.sin_addr);
                 {
-                    READ_LOCK(_srand_mutex);
                     auto &s = _srands.at(source.s_addr);
                     read_lock lc(s.connection_mutex);
                     s.connections.at(_union.key).received_once(type.state);
@@ -185,7 +184,7 @@ namespace autolabor::connection_aggregation
                             ; // TODO 使用包内容
                     };
                 }
-                send_handshake(source);
+                send_void(source, true);
             }
         }
     }

@@ -5,6 +5,8 @@
 #include <linux/rtnetlink.h>
 #include <unistd.h>
 
+#include <iostream>
+
 namespace autolabor::connection_aggregation
 {
     bool host_t::bind(device_index_t index, uint16_t port)
@@ -27,17 +29,14 @@ namespace autolabor::connection_aggregation
                 return;
         }
         connection_key_union _union{.pair{.src_index = index}};
+        for (auto &[_, s] : _srands)
         {
-            READ_LOCK(_srand_mutex);
-            for (auto &[_, s] : _srands)
+            read_lock lp(s.port_mutex);
+            write_lock lc(s.connection_mutex);
+            for (const auto [port, _] : s.ports)
             {
-                read_lock lp(s.port_mutex);
-                write_lock lc(s.connection_mutex);
-                for (const auto [port, _] : s.ports)
-                {
-                    _union.pair.dst_port = port;
-                    s.connections.try_emplace(_union.key);
-                }
+                _union.pair.dst_port = port;
+                s.connections.try_emplace(_union.key);
             }
         }
     }
@@ -50,17 +49,14 @@ namespace autolabor::connection_aggregation
                 return;
         }
         connection_key_union _union{.pair{.src_index = index}};
+        for (auto &[_, s] : _srands)
         {
-            READ_LOCK(_srand_mutex);
-            for (auto &[_, s] : _srands)
+            read_lock lp(s.port_mutex);
+            write_lock lc(s.connection_mutex);
+            for (const auto [port, _] : s.ports)
             {
-                read_lock lp(s.port_mutex);
-                write_lock lc(s.connection_mutex);
-                for (const auto [port, _] : s.ports)
-                {
-                    _union.pair.dst_port = port;
-                    s.connections.erase(_union.key);
-                }
+                _union.pair.dst_port = port;
+                s.connections.erase(_union.key);
             }
         }
     }
@@ -104,10 +100,24 @@ namespace autolabor::connection_aggregation
     void host_t::read_unix(uint8_t *buffer, size_t size)
     {
         auto n = read(_unix, buffer, size);
-        if (buffer[0] == ADD_REMOTE && n == sizeof(msg_remote_t))
+        switch (buffer[0])
         {
-            auto msg = reinterpret_cast<msg_remote_t *>(buffer);
-            add_remote_inner(msg->virtual_, msg->port, msg->actual_);
+        case VIEW:
+            std::cout << *this << std::endl;
+        case YELL:
+            send_void({}, false);
+            break;
+        case SEND_HANDSHAKE:
+            if (n == 5)
+                send_void(*reinterpret_cast<in_addr *>(buffer + 1), false);
+            break;
+        case ADD_REMOTE:
+            if (n == sizeof(msg_remote_t))
+            {
+                auto msg = reinterpret_cast<msg_remote_t *>(buffer);
+                add_remote_inner(msg->virtual_, msg->port, msg->actual_);
+            }
+            break;
         }
     }
 
