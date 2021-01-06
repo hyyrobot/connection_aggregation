@@ -96,7 +96,7 @@ bool script(host_t &h, const std::list<std::string> &commands)
         {
             h.yell();
             std::this_thread::sleep_for(200ms);
-            std::cout << h << std::endl;
+            h.print();
             return true;
         }
         break;
@@ -108,7 +108,7 @@ bool script(host_t &h, const std::list<std::string> &commands)
             inet_pton(AF_INET, p->data(), &a);
             h.yell(a);
             std::this_thread::sleep_for(200ms);
-            std::cout << h << std::endl;
+            h.print();
             return true;
         }
         break;

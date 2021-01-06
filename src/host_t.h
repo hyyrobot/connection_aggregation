@@ -85,7 +85,6 @@ namespace autolabor::connection_aggregation
     struct host_t
     {
         host_t(const char *, in_addr);
-        friend std::ostream &operator<<(std::ostream &, const host_t &);
 
         // 为某网卡的套接字绑定一个端口号
         // 应该仅由服务器调用，不要滥用
@@ -104,6 +103,7 @@ namespace autolabor::connection_aggregation
         // 主动发送握手
         void yell(in_addr = {});
 
+        // 打印
         void print();
 
     private:

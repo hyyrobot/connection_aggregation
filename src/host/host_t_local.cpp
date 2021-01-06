@@ -2,6 +2,7 @@
 
 #include "../ERRNO_MACRO.h"
 
+#include <arpa/inet.h>
 #include <linux/rtnetlink.h>
 #include <unistd.h>
 
@@ -19,6 +20,13 @@ namespace autolabor::connection_aggregation
 
         p->second.bind(port);
         return true;
+    }
+
+    void host_t::print()
+    {
+        constexpr static uint8_t msg = VIEW;
+        fd_guard_t temp(socket(AF_UNIX, SOCK_DGRAM, 0));
+        sendto(temp, &msg, sizeof(msg), MSG_WAITALL, reinterpret_cast<sockaddr *>(&_address_un), sizeof(sockaddr_un));
     }
 
     void host_t::device_added(device_index_t index, const char *name)
@@ -100,10 +108,73 @@ namespace autolabor::connection_aggregation
     void host_t::read_unix(uint8_t *buffer, size_t size)
     {
         auto n = read(_unix, buffer, size);
-        switch (buffer[0])
+        switch (*buffer)
         {
         case VIEW:
-            std::cout << *this << std::endl;
+        {
+            std::stringstream builder;
+            char text[16];
+            inet_ntop(AF_INET, &_address, text, sizeof(text));
+            builder << _name << '(' << _index << "): " << text << " | ";
+
+            if (_devices.empty())
+                builder << "devices: []" << std::endl;
+            else
+            {
+                read_lock l(_device_mutex);
+                auto p = _devices.begin();
+                builder << "devices: [" << p->first;
+                for (++p; p != _devices.end(); ++p)
+                    builder << ", " << p->first;
+                builder << ']';
+            }
+
+            if (_srands.empty())
+                break;
+
+            const static std::string
+                title = "|      host       | index |  port  |     address     | state | input | output | counter |",
+                _____ = "| --------------- | ----- | ------ | --------------- | ----- | ----- | ------ | ------- |",
+                space = "|                 |       |        |                 |  -->  |       |        |         |";
+            builder << std::endl
+                    << std::endl
+                    << title << std::endl
+                    << _____ << std::endl;
+
+            connection_key_union _union;
+            connection_t::snapshot_t snapshot;
+            for (auto &[a, s] : _srands)
+            {
+                inet_ntop(AF_INET, &a, text, sizeof(text));
+                read_lock ll(s.connection_mutex);
+                for (const auto &[k, c] : s.connections)
+                {
+                    auto buffer = space;
+                    auto b = buffer.data();
+                    std::strcpy(b + 2, text);
+                    _union.key = k;
+                    std::to_string(_union.pair.src_index).copy(b + 22, 5);
+                    std::to_string(_union.pair.dst_port).copy(b + 29, 6);
+                    {
+                        read_lock lll(s.port_mutex);
+                        auto a = s.ports.at(_union.pair.dst_port);
+                        inet_ntop(AF_INET, &a, b + 37, 17);
+                    }
+                    c.snapshot(&snapshot);
+                    b[55] = snapshot.state + '0';
+                    b[59] = snapshot.opposite + '0';
+                    std::to_string(snapshot.received).copy(b + 63, 5);
+                    std::to_string(snapshot.sent).copy(b + 71, 6);
+                    std::to_string(snapshot.counter).copy(b + 80, 9);
+                    for (auto &c : buffer)
+                        if (c < ' ')
+                            c = ' ';
+                    builder << buffer << std::endl;
+                }
+            }
+            std::cout << builder.str() << std::endl;
+        }
+        break;
         case YELL:
             send_void({}, false);
             break;

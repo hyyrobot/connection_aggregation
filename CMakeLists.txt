@@ -26,7 +26,6 @@ add_library(kernel
     src/host/host_t_remote.cpp
     src/host/host_t_send.cpp
     src/host/host_t_receive.cpp
-    src/host/host_t_access.cpp
 )
 
 find_package(Threads)
