@@ -43,6 +43,12 @@ namespace autolabor::connection_aggregation
         remote_t();
         ~remote_t();
 
+        // 新网卡已添加到主机
+        void device_added(device_index_t);
+
+        // 新网卡已从主机移除
+        void device_removed(device_index_t);
+
         // 设定到主机的直连路由
         bool add_direct(in_addr, uint16_t, const std::vector<device_index_t> &);
 
@@ -52,8 +58,11 @@ namespace autolabor::connection_aggregation
         // 获得一个唯一报文 id
         uint16_t get_id();
 
+        // 检查接收 id 唯一性
+        bool check_multiple(uint16_t);
+
         // 填写目标连接地址和状态
-        bool get_address_set_state(connection_key_union, in_addr *, pack_type_t *) const;
+        bool set_address_and_state(connection_key_union, in_addr *, pack_type_t *) const;
 
     private:
         using stamp_t = std::chrono::steady_clock::time_point;

@@ -32,7 +32,6 @@ namespace autolabor::connection_aggregation
             auto [q, b] = s.ports.try_emplace(port, address);
             if (b)
             {
-                READ_LOCK(_device_mutex);
                 write_lock lc(s.connection_mutex);
                 connection_key_union _union{.pair{.dst_port = port}};
                 for (const auto &[i, _] : _devices)

@@ -154,11 +154,7 @@ namespace autolabor::connection_aggregation
             .msg_iovlen = sizeof(iov) / sizeof(iovec),
         };
 
-        size_t result;
-        {
-            READ_LOCK(_device_mutex);
-            result = _devices.at(_union.pair.src_index).send(&msg);
-        }
+        auto result = _devices.at(_union.pair.src_index).send(&msg);
         if (result > 0)
         {
             auto &s = _srands.at(dst.s_addr);

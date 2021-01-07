@@ -12,13 +12,14 @@ namespace autolabor::connection_aggregation
 {
     bool host_t::bind(device_index_t index, uint16_t port)
     {
-        READ_LOCK(_device_mutex);
-        auto p = _devices.find(index);
+        fd_guard_t temp(socket(AF_UNIX, SOCK_DGRAM, 0));
+        msg_bind_t msg{
+            .type = BIND,
+            .index = index,
+            .port = port,
+        };
+        sendto(temp, &msg, sizeof(msg), MSG_WAITALL, reinterpret_cast<sockaddr *>(&_address_un), sizeof(sockaddr_un));
 
-        if (p == _devices.end())
-            return false;
-
-        p->second.bind(port);
         return true;
     }
 
@@ -31,11 +32,8 @@ namespace autolabor::connection_aggregation
 
     void host_t::device_added(device_index_t index, const char *name)
     {
-        {
-            READ_LOCK(_device_mutex);
-            if (!_devices.try_emplace(index, name, _epoll.operator int(), index).second)
-                return;
-        }
+        if (!_devices.try_emplace(index, name, _epoll.operator int(), index).second)
+            return;
         connection_key_union _union{.pair{.src_index = index}};
         for (auto &[_, s] : _srands)
         {
@@ -51,11 +49,8 @@ namespace autolabor::connection_aggregation
 
     void host_t::device_removed(device_index_t index)
     {
-        {
-            READ_LOCK(_device_mutex);
-            if (!_devices.erase(index))
-                return;
-        }
+        if (!_devices.erase(index))
+            return;
         connection_key_union _union{.pair{.src_index = index}};
         for (auto &[_, s] : _srands)
         {
@@ -121,7 +116,6 @@ namespace autolabor::connection_aggregation
                 builder << "devices: []" << std::endl;
             else
             {
-                read_lock l(_device_mutex);
                 auto p = _devices.begin();
                 builder << "devices: [" << p->first;
                 for (++p; p != _devices.end(); ++p)
@@ -175,6 +169,24 @@ namespace autolabor::connection_aggregation
             std::cout << builder.str() << std::endl;
         }
         break;
+        case BIND:
+            if (n == sizeof(msg_bind_t))
+            {
+                auto msg = reinterpret_cast<msg_bind_t *>(buffer);
+                auto p = _devices.find(msg->index);
+
+                if (p == _devices.end())
+                    std::cout << "device[" << msg->index << "] not exist" << std::endl;
+                else
+                    try
+                    {
+                        p->second.bind(msg->port);
+                    }
+                    catch (std::runtime_error &e)
+                    {
+                        std::cerr << e.what() << std::endl;
+                    }
+            }
         case YELL:
             send_void({}, false);
             break;

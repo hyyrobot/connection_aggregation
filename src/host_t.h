@@ -117,6 +117,7 @@ namespace autolabor::connection_aggregation
         enum unix_t : uint8_t
         {
             VIEW = 8,
+            BIND,
             YELL,
             SEND_HANDSHAKE,
             ADD_REMOTE,
@@ -127,6 +128,12 @@ namespace autolabor::connection_aggregation
             uint8_t type, zero;
             uint16_t port;
             in_addr virtual_, actual_;
+        };
+
+        struct msg_bind_t
+        {
+            uint8_t type, zero;
+            uint16_t index, port;
         };
 
         decltype(std::chrono::steady_clock::now()) _t0;
@@ -162,9 +169,7 @@ namespace autolabor::connection_aggregation
         device_index_t _index;
         in_addr _address;
 
-        mutable std::shared_mutex
-            _device_mutex,
-            _route_mutex;
+        mutable std::shared_mutex _route_mutex;
 
         // 本机网卡
         std::unordered_map<device_index_t, device_t> _devices;

@@ -135,12 +135,8 @@ namespace autolabor::connection_aggregation
                     .msg_iov = &iov,
                     .msg_iovlen = 1,
                 };
-                size_t n;
-                {
-                    READ_LOCK(_device_mutex);
-                    n = _devices.at(index).receive(&msg);
-                }
 
+                auto n = _devices.at(index).receive(&msg);
                 connection_key_union _union{.pair{.src_index = index, .dst_port = remote.sin_port}};
 
                 const auto source = *SOURCE;
