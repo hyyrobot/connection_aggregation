@@ -139,6 +139,12 @@ namespace autolabor::connection_aggregation
         return _distance ? _union._next : in_addr{};
     }
 
+    // 查询距离
+    uint8_t remote_t::distance() const
+    {
+        return _distance;
+    }
+
     // 筛选连接
 
     std::vector<connection_key_t>

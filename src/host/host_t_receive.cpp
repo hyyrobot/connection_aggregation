@@ -51,6 +51,91 @@ namespace autolabor::connection_aggregation
         send(ip_->ip_dst, buffer + sizeof(in_addr), n - sizeof(in_addr));
     }
 
+    void host_t::read_from_device(device_index_t index, uint8_t *buffer, size_t size)
+    {
+        sockaddr_in remote{.sin_family = AF_INET};
+        iovec iov{.iov_base = buffer, .iov_len = size};
+        msghdr msg{
+            .msg_name = &remote,
+            .msg_namelen = sizeof(remote),
+            .msg_iov = &iov,
+            .msg_iovlen = 1,
+        };
+
+        auto n = _devices.at(index).receive(&msg);
+        connection_key_union _union{.pair{.src_index = index, .dst_port = remote.sin_port}};
+
+        const auto SOURCE = reinterpret_cast<const in_addr *>(buffer);       // 解出源虚拟地址
+        const auto TYPE = reinterpret_cast<const pack_type_t *>(SOURCE + 1); // 解出类型字节
+
+        const auto source = *SOURCE;
+        const auto type = *TYPE;
+
+        add_remote_inner(source, remote.sin_addr, remote.sin_port);
+
+        auto &r = _remotes.at(source.s_addr);
+        r.received_once(_union, type.state);
+
+        if (type.forward)
+        {
+            // 转发包中有一个 ip 头
+            auto ip_ = reinterpret_cast<ip *>(buffer);
+            // 用于去重的连接束序号存在 sum 处
+            if (!type.multiple || r.check_unique(ip_->ip_sum))
+            {
+                // 如果目的是本机
+                if (ip_->ip_dst.s_addr == _address.s_addr)
+                {
+                    // 如果经过中转，更新路由表
+                    if (auto distance = MAX_TTL - ip_->ip_ttl)
+                        add_route(ip_->ip_src, source, distance);
+                    // 恢复 ip 包
+                    ip_->ip_v = 4;
+                    ip_->ip_hl = 5;
+                    ip_->ip_tos = 0;
+                    ip_->ip_len = htons(n);
+                    ip_->ip_sum = 0;
+                    ip_->ip_sum = checksum(ip_, sizeof(ip));
+                    // 转发
+                    if (n != write(_tun, buffer, n))
+                        THROW_ERRNO(__FILE__, __LINE__, "forward msg to tun")
+                }
+                else
+                {
+                    // 如果跳数没有归零，转发
+                    if (--ip_->ip_ttl)
+                        send(ip_->ip_dst, buffer + sizeof(in_addr), n - sizeof(in_addr));
+                    // 如果包含路由请求
+                    if (type.ask_route)
+                    {
+                        // 查询路由表
+                        auto p = _remotes.find(ip_->ip_dst.s_addr);
+                        if (p != _remotes.end())
+                        {
+                            msg_route_t msg{
+                                .type{.multiple = true, .special = true},
+                                .distance = p->second.distance(),
+                                .id = _id++,
+                                .which = ip_->ip_dst,
+                            };
+                            send_strand(source, reinterpret_cast<uint8_t *>(&msg), sizeof(msg));
+                        }
+                    }
+                }
+            }
+        }
+        else if (type.special && n >= 8 && (!type.multiple || r.check_unique(reinterpret_cast<uint16_t *>(buffer)[3])))
+        {
+            // 目前只有一种特殊功能包
+            if (n == sizeof(msg_route_t) + sizeof(in_addr))
+            {
+                auto msg = reinterpret_cast<const msg_route_t *>(TYPE);
+                add_route(msg->which, source, msg->distance + 1);
+            }
+        };
+        send_void(source, true);
+    }
+
     void host_t::receive(uint8_t *buffer, size_t size)
     {
         // 只能在一个线程调用，拿不到锁则放弃
@@ -58,9 +143,6 @@ namespace autolabor::connection_aggregation
         if (!L.owns_lock())
             return;
         send_list_request();
-
-        const auto SOURCE = reinterpret_cast<const in_addr *>(buffer);       // 解出源虚拟地址
-        const auto TYPE = reinterpret_cast<const pack_type_t *>(SOURCE + 1); // 解出类型字节
 
         epoll_event events[8];
         while (true)
@@ -84,64 +166,10 @@ namespace autolabor::connection_aggregation
                 case ID_NETLINK:
                     read_netlink(buffer, size);
                     continue;
+                default:
+                    read_from_device(static_cast<device_index_t>(events[ei].data.u32), buffer, size);
+                    break;
                 }
-                // 收到来自其他套接字的数据报
-                auto index = static_cast<device_index_t>(events[ei].data.u32);
-                sockaddr_in remote{.sin_family = AF_INET};
-                iovec iov{.iov_base = buffer, .iov_len = size};
-                msghdr msg{
-                    .msg_name = &remote,
-                    .msg_namelen = sizeof(remote),
-                    .msg_iov = &iov,
-                    .msg_iovlen = 1,
-                };
-
-                auto n = _devices.at(index).receive(&msg);
-                connection_key_union _union{.pair{.src_index = index, .dst_port = remote.sin_port}};
-
-                const auto source = *SOURCE;
-                const auto type = *TYPE;
-
-                add_remote_inner(source, remote.sin_addr, remote.sin_port);
-
-                auto &r = _remotes.at(source.s_addr);
-                r.received_once(_union, type.state);
-
-                if (type.forward)
-                {
-                    // 转发包中有一个 ip 头
-                    auto ip_ = reinterpret_cast<ip *>(buffer);
-                    // 用于去重的连接束序号存在 sum 处
-                    if (!type.multiple || r.check_unique(ip_->ip_sum))
-                    {
-                        // 如果目的是本机
-                        if (ip_->ip_dst.s_addr == _address.s_addr)
-                        {
-                            // 如果经过中转，更新路由表
-                            if (auto distance = MAX_TTL - ip_->ip_ttl)
-                                add_route_inner(ip_->ip_src, source, distance);
-                            // 恢复 ip 包
-                            ip_->ip_v = 4;
-                            ip_->ip_hl = 5;
-                            ip_->ip_tos = 0;
-                            ip_->ip_len = htons(n);
-                            ip_->ip_sum = 0;
-                            ip_->ip_sum = checksum(ip_, sizeof(ip));
-                            // 转发
-                            if (n != write(_tun, buffer, n))
-                                THROW_ERRNO(__FILE__, __LINE__, "forward msg to tun")
-                        }
-                        // 如果跳数没有归零
-                        else if (--ip_->ip_ttl)
-                            send(ip_->ip_dst, buffer + sizeof(in_addr), n - sizeof(in_addr));
-                    }
-                }
-                else if (type.multiple)
-                { // 需要去重
-                    if (n >= 4 && r.check_unique(reinterpret_cast<uint16_t *>(buffer)[1]))
-                        ; // TODO 使用包内容
-                };
-                send_void(source, true);
             }
         }
     }

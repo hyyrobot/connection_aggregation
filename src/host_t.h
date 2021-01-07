@@ -24,9 +24,6 @@ namespace autolabor::connection_aggregation
         // 外部使用：添加一个已知的服务器的地址
         void add_remote(in_addr, in_addr, uint16_t);
 
-        // 临时：增加静态路由
-        void add_route(in_addr, in_addr, uint8_t);
-
         // 接收服务函数
         // 缓冲区由外部提供，循环在内部
         void receive(uint8_t *, size_t);
@@ -44,8 +41,6 @@ namespace autolabor::connection_aggregation
             ID_TUN = 1u << 16u,
             ID_UNIX = 2u << 16u,
             ID_NETLINK = 3u << 16u;
-
-        std::string to_string() const;
 
         enum unix_t : uint8_t
         {
@@ -69,29 +64,39 @@ namespace autolabor::connection_aggregation
             uint16_t index, port;
         };
 
-        decltype(std::chrono::steady_clock::now()) _t0;
+        struct msg_route_t
+        {
+            pack_type_t type;
+            uint8_t distance;
+            uint16_t id;
+            in_addr which;
+        };
+
+        // 本机网卡
+        std::unordered_map<device_index_t, device_t> _devices;
+
+        // 远程主机
+        std::unordered_map<in_addr_t, remote_t> _remotes;
 
         std::mutex _receiving;
-
         fd_guard_t _netlink, _tun, _unix, _epoll;
+
+        std::string to_string() const;
 
         // 向 netlink 发送查询网卡请求
         void send_list_request() const;
 
-        // 转发 tun 消息
+        sockaddr_un _address_un;
         void read_tun(uint8_t *, size_t);
-
-        // 执行 unix 消息
         void read_unix(uint8_t *, size_t);
-
-        // 解析 netlink 消息
         void read_netlink(uint8_t *, size_t);
+        void read_from_device(device_index_t, uint8_t *, size_t);
 
         std::atomic_uint16_t _id{};
 
         void send_void(in_addr, bool);
+        void add_route(in_addr, in_addr, uint8_t);
         void add_remote_inner(in_addr, in_addr, uint16_t);
-        void add_route_inner(in_addr, in_addr, uint8_t);
 
         void device_added(device_index_t, const char *);
         void device_removed(device_index_t);
@@ -100,17 +105,9 @@ namespace autolabor::connection_aggregation
         size_t send_strand(in_addr, const uint8_t *, size_t);
         void send(in_addr, uint8_t *, size_t);
 
-        sockaddr_un _address_un;
-
         char _name[IFNAMSIZ];
         device_index_t _index;
         in_addr _address;
-
-        // 本机网卡
-        std::unordered_map<device_index_t, device_t> _devices;
-
-        // 远程主机
-        std::unordered_map<in_addr_t, remote_t> _remotes;
     };
 
 } // namespace autolabor::connection_aggregation

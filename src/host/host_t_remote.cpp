@@ -16,11 +16,6 @@ namespace autolabor::connection_aggregation
         sendto(temp, &msg, sizeof(msg_remote_t), MSG_WAITALL, reinterpret_cast<sockaddr *>(&_address_un), sizeof(sockaddr_un));
     }
 
-    void host_t::add_route(in_addr dst, in_addr next, uint8_t distance)
-    {
-        add_route_inner(dst, next, distance);
-    }
-
     void host_t::add_remote_inner(in_addr virtual_, in_addr actual_, uint16_t port)
     {
         auto &r = _remotes.try_emplace(virtual_.s_addr).first->second;
@@ -31,7 +26,7 @@ namespace autolabor::connection_aggregation
         r.add_direct(actual_, port, indices);
     }
 
-    void host_t::add_route_inner(in_addr dst, in_addr next, uint8_t distance)
+    void host_t::add_route(in_addr dst, in_addr next, uint8_t distance)
     {
         _remotes.try_emplace(dst.s_addr).first->second.add_route(next, distance);
     }

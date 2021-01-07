@@ -136,17 +136,6 @@ bool script(host_t &h, const std::list<std::string> &commands)
             std::cout << "add remote " << *++p << " at " << *++p << ':' << *++p << std::endl;
             return true;
         }
-        if (*p == "route")
-        {
-            in_addr a0, a1;
-            inet_pton(AF_INET, (++p)->c_str(), &a0);
-            inet_pton(AF_INET, (++p)->c_str(), &a1);
-            auto distance = std::stod(*++p);
-            h.add_route(a0, a1, distance);
-            p = commands.begin();
-            std::cout << "add route " << *++p << " via " << *++p << std::endl;
-            return true;
-        }
         break;
     }
     std::cout << "known command" << std::endl;

@@ -17,8 +17,7 @@ namespace autolabor::connection_aggregation
           _tun(open("/dev/net/tun", O_RDWR)),
           _unix(socket(AF_UNIX, SOCK_DGRAM, 0)),
           _address_un{.sun_family = AF_UNIX},
-          _epoll(epoll_create1(0)),
-          _t0(std::chrono::steady_clock::now())
+          _epoll(epoll_create1(0))
     {
         // 绑定 netlink
         sockaddr_nl netlink{

@@ -18,7 +18,8 @@ namespace autolabor::connection_aggregation
         bool
             multiple : 1,  // 需要去重/包含 id
             forward : 1,   // 到达后向应用层上传
-            ask_route : 1; // 需要响应路由跳数
+            ask_route : 1, // 要求响应路由查询
+            special : 1;   // 具有内部功能
     };
 
     // 连接表示法
@@ -66,6 +67,9 @@ namespace autolabor::connection_aggregation
 
         // 查询下一跳地址
         in_addr next() const;
+
+        // 查询距离
+        uint8_t distance() const;
 
         // 筛选连接
         std::vector<connection_key_t> filter_for_handshake(bool on_demand) const;
