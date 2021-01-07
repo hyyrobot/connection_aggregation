@@ -1,8 +1,7 @@
 #ifndef HOST_T_H
 #define HOST_T_H
 
-#include "device_t.h"
-#include "connection_t.h"
+#include "remote_t.h"
 
 #include <linux/if.h>
 #include <sys/un.h> // sockaddr_un
@@ -23,65 +22,6 @@
 
 namespace autolabor::connection_aggregation
 {
-    using read_lock = std::shared_lock<std::shared_mutex>;
-    using write_lock = std::unique_lock<std::shared_mutex>;
-
-    struct pack_type_t
-    {
-        uint8_t
-            state : 2;
-        bool
-            multiple : 1, // 需要去重/包含 id
-            forward : 1;  // 到达后向应用层上传
-    };
-
-    // 连接表示法
-    union connection_key_union
-    {
-        // 用一个整型作为索引以免手工实现 hash
-        using key_t = uint32_t;
-
-        key_t key;
-        struct
-        {
-            uint16_t
-                src_index, // 本机网卡序号
-                dst_port;  // 远程主机端口号
-        } pair;
-    };
-
-    using connection_key_t = connection_key_union::key_t;
-
-    struct srand_t
-    {
-        constexpr static auto TIMEOUT = std::chrono::seconds(2);
-
-        mutable std::shared_mutex port_mutex, connection_mutex;
-
-        std::unordered_map<uint16_t, in_addr> ports;
-        std::unordered_map<connection_key_t, connection_t> connections;
-
-        // 获得一个新的发送序号
-        uint16_t get_id();
-
-        // 检查接收序号是否已经接收过
-        bool check_received(uint16_t);
-
-        // 查找最优连接
-        std::vector<connection_key_t> filter_for_forward() const;
-
-        // 查找需要握手的连接
-        std::vector<connection_key_t> filter_for_handshake(bool) const;
-
-    private:
-        std::atomic_uint16_t _id{};
-
-        using stamp_t = std::chrono::steady_clock::time_point;
-        std::mutex _id_updater;
-        std::queue<uint16_t> _received_id;
-        std::unordered_map<uint16_t, stamp_t> _received_time;
-    };
-
     struct host_t
     {
         host_t(const char *, in_addr);
@@ -114,6 +54,8 @@ namespace autolabor::connection_aggregation
             ID_UNIX = 2u << 16u,
             ID_NETLINK = 3u << 16u;
 
+        std::string to_string() const;
+
         enum unix_t : uint8_t
         {
             VIEW = 8,
@@ -145,23 +87,27 @@ namespace autolabor::connection_aggregation
         // 向 netlink 发送查询网卡请求
         void send_list_request() const;
 
-        // 解析 unix 消息
+        // 转发 tun 消息
+        void read_tun(uint8_t *, size_t);
+
+        // 执行 unix 消息
         void read_unix(uint8_t *, size_t);
 
         // 解析 netlink 消息
         void read_netlink(uint8_t *, size_t);
 
-        // 转发来自 tun 的数据报
-        void forward(uint8_t *, size_t);
+        std::atomic_uint16_t _id{};
 
         void send_void(in_addr, bool);
-        void add_remote_inner(in_addr, uint16_t, in_addr);
+        void add_remote_inner(in_addr, in_addr, uint16_t);
         void add_route_inner(in_addr, in_addr, uint8_t);
 
         void device_added(device_index_t, const char *);
         void device_removed(device_index_t);
 
-        size_t send_single(in_addr, connection_key_union, uint8_t *, size_t);
+        size_t send_single(in_addr, connection_key_union, const uint8_t *, size_t);
+        size_t send_strand(in_addr, const uint8_t *, size_t);
+        void send(in_addr, uint8_t *, size_t);
 
         sockaddr_un _address_un;
 
@@ -169,22 +115,11 @@ namespace autolabor::connection_aggregation
         device_index_t _index;
         in_addr _address;
 
-        mutable std::shared_mutex _route_mutex;
-
         // 本机网卡
         std::unordered_map<device_index_t, device_t> _devices;
 
         // 远程主机
-        std::unordered_map<in_addr_t, srand_t> _srands;
-
-        struct route_item_t
-        {
-            in_addr next;
-            uint8_t distance;
-        };
-
-        // 路由表
-        std::unordered_map<in_addr_t, route_item_t> _route;
+        std::unordered_map<in_addr_t, remote_t> _remotes;
     };
 
 } // namespace autolabor::connection_aggregation

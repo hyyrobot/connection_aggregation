@@ -32,36 +32,16 @@ namespace autolabor::connection_aggregation
 
     void host_t::device_added(device_index_t index, const char *name)
     {
-        if (!_devices.try_emplace(index, name, _epoll.operator int(), index).second)
-            return;
-        connection_key_union _union{.pair{.src_index = index}};
-        for (auto &[_, s] : _srands)
-        {
-            read_lock lp(s.port_mutex);
-            write_lock lc(s.connection_mutex);
-            for (const auto [port, _] : s.ports)
-            {
-                _union.pair.dst_port = port;
-                s.connections.try_emplace(_union.key);
-            }
-        }
+        if (_devices.try_emplace(index, name, _epoll.operator int(), index).second)
+            for (auto &[_, r] : _remotes)
+                r.device_added(index);
     }
 
     void host_t::device_removed(device_index_t index)
     {
-        if (!_devices.erase(index))
-            return;
-        connection_key_union _union{.pair{.src_index = index}};
-        for (auto &[_, s] : _srands)
-        {
-            read_lock lp(s.port_mutex);
-            write_lock lc(s.connection_mutex);
-            for (const auto [port, _] : s.ports)
-            {
-                _union.pair.dst_port = port;
-                s.connections.erase(_union.key);
-            }
-        }
+        if (_devices.erase(index))
+            for (auto &[_, r] : _remotes)
+                r.device_added(index);
     }
 
     void host_t::read_netlink(uint8_t *buffer, size_t size)
@@ -75,27 +55,29 @@ namespace autolabor::connection_aggregation
             {
             case RTM_NEWLINK:
             {
-                const ifinfomsg *ifi = (struct ifinfomsg *)NLMSG_DATA(h);
+                const auto ifi = reinterpret_cast<ifinfomsg *>(NLMSG_DATA(h));
+                const auto index = ifi->ifi_index;
                 if (ifi->ifi_flags & IFF_UP)
                 {
                     const rtattr *rta = IFLA_RTA(ifi);
-                    auto l = h->nlmsg_len - ((uint8_t *)rta - (uint8_t *)h);
-                    for (; RTA_OK(rta, l); rta = RTA_NEXT(rta, l))
+                    for (auto l = h->nlmsg_len - ((uint8_t *)rta - (uint8_t *)h);
+                         RTA_OK(rta, l);
+                         rta = RTA_NEXT(rta, l))
                         if (rta->rta_type == IFLA_IFNAME)
                         {
-                            const char *name = reinterpret_cast<char *>(RTA_DATA(rta));
+                            auto name = reinterpret_cast<char *>(RTA_DATA(rta));
                             if (name && std::strcmp(name, _name) != 0 && std::strcmp(name, "lo") != 0)
-                                device_added(ifi->ifi_index, name);
+                                device_added(index, name);
                             break;
                         }
                 }
                 else // 关闭的网卡相当于删除
-                    device_removed(((struct ifinfomsg *)NLMSG_DATA(h))->ifi_index);
+                    device_removed(index);
                 break;
             }
 
             case RTM_DELLINK:
-                device_removed(((struct ifinfomsg *)NLMSG_DATA(h))->ifi_index);
+                device_removed(reinterpret_cast<ifinfomsg *>(NLMSG_DATA(h))->ifi_index);
                 break;
             }
     }
@@ -106,69 +88,8 @@ namespace autolabor::connection_aggregation
         switch (*buffer)
         {
         case VIEW:
-        {
-            std::stringstream builder;
-            char text[16];
-            inet_ntop(AF_INET, &_address, text, sizeof(text));
-            builder << _name << '(' << _index << "): " << text << " | ";
-
-            if (_devices.empty())
-                builder << "devices: []" << std::endl;
-            else
-            {
-                auto p = _devices.begin();
-                builder << "devices: [" << p->first;
-                for (++p; p != _devices.end(); ++p)
-                    builder << ", " << p->first;
-                builder << ']';
-            }
-
-            if (_srands.empty())
-                break;
-
-            const static std::string
-                title = "|      host       | index |  port  |     address     | state | input | output | counter |",
-                _____ = "| --------------- | ----- | ------ | --------------- | ----- | ----- | ------ | ------- |",
-                space = "|                 |       |        |                 |  -->  |       |        |         |";
-            builder << std::endl
-                    << std::endl
-                    << title << std::endl
-                    << _____ << std::endl;
-
-            connection_key_union _union;
-            connection_t::snapshot_t snapshot;
-            for (auto &[a, s] : _srands)
-            {
-                inet_ntop(AF_INET, &a, text, sizeof(text));
-                read_lock ll(s.connection_mutex);
-                for (const auto &[k, c] : s.connections)
-                {
-                    auto buffer = space;
-                    auto b = buffer.data();
-                    std::strcpy(b + 2, text);
-                    _union.key = k;
-                    std::to_string(_union.pair.src_index).copy(b + 22, 5);
-                    std::to_string(_union.pair.dst_port).copy(b + 29, 6);
-                    {
-                        read_lock lll(s.port_mutex);
-                        auto a = s.ports.at(_union.pair.dst_port);
-                        inet_ntop(AF_INET, &a, b + 37, 17);
-                    }
-                    c.snapshot(&snapshot);
-                    b[55] = snapshot.state + '0';
-                    b[59] = snapshot.opposite + '0';
-                    std::to_string(snapshot.received).copy(b + 63, 5);
-                    std::to_string(snapshot.sent).copy(b + 71, 6);
-                    std::to_string(snapshot.counter).copy(b + 80, 9);
-                    for (auto &c : buffer)
-                        if (c < ' ')
-                            c = ' ';
-                    builder << buffer << std::endl;
-                }
-            }
-            std::cout << builder.str() << std::endl;
-        }
-        break;
+            std::cout << to_string() << std::endl;
+            break;
         case BIND:
             if (n == sizeof(msg_bind_t))
             {
@@ -176,17 +97,19 @@ namespace autolabor::connection_aggregation
                 auto p = _devices.find(msg->index);
 
                 if (p == _devices.end())
-                    std::cout << "device[" << msg->index << "] not exist" << std::endl;
+                    std::cerr << "devices[" << msg->index << "] not exist" << std::endl;
                 else
                     try
                     {
                         p->second.bind(msg->port);
+                        std::cout << "bind devices[" << msg->index << "] to port " << msg->port << std::endl;
                     }
                     catch (std::runtime_error &e)
                     {
                         std::cerr << e.what() << std::endl;
                     }
             }
+            break;
         case YELL:
             send_void({}, false);
             break;
@@ -198,10 +121,50 @@ namespace autolabor::connection_aggregation
             if (n == sizeof(msg_remote_t))
             {
                 auto msg = reinterpret_cast<msg_remote_t *>(buffer);
-                add_remote_inner(msg->virtual_, msg->port, msg->actual_);
+                add_remote_inner(msg->virtual_, msg->actual_, msg->port);
             }
             break;
         }
+    }
+
+    std::string host_t::to_string() const
+    {
+        std::stringstream builder;
+        char text[16];
+        inet_ntop(AF_INET, &_address, text, sizeof(text));
+        builder << _name << '(' << _index << "): " << text << " | ";
+
+        if (_devices.empty())
+            builder << "devices: []" << std::endl;
+        else
+        {
+            auto p = _devices.begin();
+            builder << "devices: [" << p->first;
+            for (++p; p != _devices.end(); ++p)
+                builder << ", " << p->first;
+            builder << ']';
+        }
+
+        if (_remotes.empty())
+            return builder.str();
+
+        builder << std::endl
+                << std::endl
+                << remote_t::TITLE << std::endl
+                << remote_t::_____ << std::endl;
+
+        connection_key_union _union;
+        connection_t::snapshot_t snapshot;
+        for (auto &[a, r] : _remotes)
+        {
+            auto buffer = r.to_string();
+            inet_ntop(AF_INET, &a, buffer.data() + 2, 16);
+            for (auto &c : buffer)
+                if (!c)
+                    c = ' ';
+            builder << buffer << std::endl;
+        }
+        return builder.str();
     }
 
 } // namespace autolabor::connection_aggregation

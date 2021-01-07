@@ -38,6 +38,7 @@ int main(int argc, char *argv[])
     for (auto i = 3; i < argc; ++i)
         builder << argv[i] << ' ';
 
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     [&h](auto c) { return script(h, c); } << builder << std::cin;
 
     return 0;
@@ -118,10 +119,7 @@ bool script(host_t &h, const std::list<std::string> &commands)
         {
             auto index = std::stod(*++p);
             auto port = std::stod(*++p);
-            (h.bind(index, port)
-                 ? std::cout << "bind device[" << index << "] with port " << port
-                 : std::cout << "bind failed")
-                << std::endl;
+            h.bind(index, port);
             return true;
         }
         break;

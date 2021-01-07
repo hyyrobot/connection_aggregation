@@ -6,6 +6,7 @@
 
 #include <netinet/in.h>
 
+#include <string>
 #include <chrono>
 #include <queue>
 #include <unordered_map>
@@ -17,8 +18,9 @@ namespace autolabor::connection_aggregation
         uint8_t
             state : 2;
         bool
-            multiple : 1, // 需要去重/包含 id
-            forward : 1;  // 到达后向应用层上传
+            multiple : 1,  // 需要去重/包含 id
+            forward : 1,   // 到达后向应用层上传
+            ask_route : 1; // 需要响应路由跳数
     };
 
     // 连接表示法
@@ -55,14 +57,31 @@ namespace autolabor::connection_aggregation
         // 设定到主机的路由
         bool add_route(in_addr, uint8_t);
 
-        // 获得一个唯一报文 id
-        uint16_t get_id();
-
         // 检查接收 id 唯一性
-        bool check_multiple(uint16_t);
+        bool check_unique(uint16_t);
+
+        // 通过某个连接发送计数
+        size_t sent_once(connection_key_union);
+
+        // 通过某个连接接收计数
+        size_t received_once(connection_key_union, uint8_t);
+
+        // 查询下一跳地址
+        in_addr next() const;
+
+        // 筛选连接
+        std::vector<connection_key_t> filter_for_handshake(bool on_demand) const;
+        std::vector<connection_key_t> filter_for_forward() const;
 
         // 填写目标连接地址和状态
         bool set_address_and_state(connection_key_union, in_addr *, pack_type_t *) const;
+
+        constexpr static auto
+            TITLE = "|      host       | index |  port  |     address     | state | input | output | counter |",
+            _____ = "| --------------- | ----- | ------ | --------------- | ----- | ----- | ------ | ------- |",
+            SPACE = "|                 |       |        |                 |  -->  |       |        |         |";
+
+        std::string to_string() const;
 
     private:
         using stamp_t = std::chrono::steady_clock::time_point;
@@ -75,9 +94,8 @@ namespace autolabor::connection_aggregation
         // 去重
         constexpr static auto TIMEOUT = std::chrono::seconds(2);
 
-        std::atomic_uint16_t _id_s;
-        std::queue<uint16_t> _id_r;
-        std::unordered_map<uint16_t, stamp_t> _received_time;
+        std::queue<uint16_t> _id;
+        std::unordered_map<uint16_t, stamp_t> _time;
 
         // 路由
         uint8_t _distance;

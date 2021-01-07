@@ -1,8 +1,12 @@
 #include "remote_t.h"
 
+#include <arpa/inet.h>
+
+#include <sstream>
+
 namespace autolabor::connection_aggregation
 {
-    remote_t::remote_t() : _id_s(0), _distance(-1), _union{} {}
+    remote_t::remote_t() : _distance(-1), _union{} {}
 
     remote_t::~remote_t()
     {
@@ -45,7 +49,7 @@ namespace autolabor::connection_aggregation
     // 设定到主机的直连路由
     bool remote_t::add_direct(in_addr address, uint16_t port, const std::vector<device_index_t> &devices)
     {
-        auto result = !_distance;
+        bool result = _distance;
         if (result)
         {
             _distance = 0;
@@ -80,47 +84,108 @@ namespace autolabor::connection_aggregation
         return true;
     }
 
-    // 获得一个唯一报文 id
-    uint16_t remote_t::get_id()
-    {
-        return _id_s++;
-    }
-
     // 检查接收 id 唯一性
-    bool remote_t::check_multiple(uint16_t id)
+    bool remote_t::check_unique(uint16_t id)
     {
         const auto
             now = std::chrono::steady_clock::now(),
             timeout = now + TIMEOUT;
-        auto p = _received_time.find(id);
+        auto p = _time.find(id);
         // id 不存在
-        if (p == _received_time.end())
+        if (p == _time.end())
         {
-            _received_time.emplace(id, now);
-            _id_r.push(id);
+            _time.emplace(id, now);
+            _id.push(id);
         }
         // id 存在但已超时
         else if (p->second < timeout)
         {
             p->second = now;
             decltype(id) pop;
-            while ((pop = _id_r.front()) != id)
+            while ((pop = _id.front()) != id)
             {
-                _id_r.pop();
-                _received_time.erase(pop);
+                _id.pop();
+                _time.erase(pop);
             }
         }
         // id 不唯一
         else
             return false;
         // 清扫所有超时的
-        decltype(_received_time.end()) it;
-        while ((it = _received_time.find(_id_r.front()))->second < timeout)
+        decltype(_time.end()) it;
+        while (!_id.empty() && (it = _time.find(_id.front()))->second < timeout)
         {
-            _id_r.pop();
-            _received_time.erase(it);
+            _id.pop();
+            _time.erase(it);
         }
         return true;
+    }
+
+    // 通过某个连接发送计数
+    size_t remote_t::sent_once(connection_key_union key)
+    {
+        return _distance ? -1 : _union._strand->_connections.at(key.key).sent_once();
+    }
+
+    // 通过某个连接接收计数
+    size_t remote_t::received_once(connection_key_union key, uint8_t state)
+    {
+        return _distance ? -1 : _union._strand->_connections.at(key.key).received_once(state);
+    }
+
+    // 查询下一跳地址
+    in_addr remote_t::next() const
+    {
+        return _distance ? _union._next : in_addr{};
+    }
+
+    // 筛选连接
+
+    std::vector<connection_key_t>
+    remote_t::filter_for_handshake(bool on_demand) const
+    {
+        if (_distance)
+            return {};
+        std::vector<connection_key_t> result;
+        auto &connections = _union._strand->_connections;
+        if (on_demand)
+        { // 按需发送握手
+            for (auto &[k, c] : connections)
+                if (c.need_handshake())
+                    result.push_back(k);
+        }
+        else
+        { // 向所有连接发送握手
+            result.resize(connections.size());
+            auto p = connections.begin();
+            for (auto q = result.begin(); q != result.end(); ++p, ++q)
+                *q = p->first;
+        }
+        return result;
+    }
+
+    std::vector<connection_key_t>
+    remote_t::filter_for_forward() const
+    {
+        if (_distance)
+            return {};
+        std::vector<connection_key_t> result;
+        auto max = 0;
+        for (const auto &[k, c] : _union._strand->_connections)
+        {
+            auto s_ = c.state();
+            if (s_ < max)
+                continue;
+            if (s_ > max)
+            {
+                max = s_;
+                result.resize(1);
+                result[0] = k;
+            }
+            else
+                result.push_back(k);
+        }
+        return result;
     }
 
     // 填写目标连接地址和状态
@@ -133,6 +198,43 @@ namespace autolabor::connection_aggregation
         *address = p->second;
         type->state = s->_connections.at(key.key).state();
         return true;
+    }
+
+    std::string remote_t::to_string() const
+    {
+        std::stringstream builder;
+        if (_distance)
+        {
+            std::string buffer(SPACE);
+            auto b = buffer.data();
+            inet_ntop(AF_INET, &_union._next, b + 37, 17);
+            std::to_string(_distance).copy(b + 80, 9);
+            builder << buffer << std::endl;
+            return builder.str();
+        }
+        connection_key_union key;
+        connection_t::snapshot_t snapshot;
+        for (const auto &[k, c] : _union._strand->_connections)
+        {
+            std::string buffer(SPACE);
+            auto b = buffer.data();
+            key.key = k;
+            std::to_string(key.pair.src_index).copy(b + 22, 5);
+            std::to_string(key.pair.dst_port).copy(b + 29, 6);
+            auto a = _union._strand->_ports.at(key.pair.dst_port);
+            inet_ntop(AF_INET, &a, b + 37, 17);
+            c.snapshot(&snapshot);
+            b[55] = snapshot.state + '0';
+            b[59] = snapshot.opposite + '0';
+            std::to_string(snapshot.received).copy(b + 63, 5);
+            std::to_string(snapshot.sent).copy(b + 71, 6);
+            std::to_string(snapshot.counter).copy(b + 80, 9);
+            for (auto &c : buffer)
+                if (c < ' ')
+                    c = ' ';
+            builder << buffer << std::endl;
+        }
+        return builder.str();
     }
 
 } // namespace autolabor::connection_aggregation
