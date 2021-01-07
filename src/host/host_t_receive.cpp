@@ -54,7 +54,9 @@ namespace autolabor::connection_aggregation
     void host_t::receive(uint8_t *buffer, size_t size)
     {
         // 只能在一个线程调用，拿不到锁则放弃
-        TRY_LOCK(_receiving, return );
+        std::unique_lock<std::mutex> L(_receiving, std::try_to_lock);
+        if (!L.owns_lock())
+            return;
         send_list_request();
 
         const auto SOURCE = reinterpret_cast<const in_addr *>(buffer);       // 解出源虚拟地址
@@ -99,12 +101,12 @@ namespace autolabor::connection_aggregation
 
                 const auto source = *SOURCE;
                 const auto type = *TYPE;
-                
+
                 add_remote_inner(source, remote.sin_addr, remote.sin_port);
 
                 auto &r = _remotes.at(source.s_addr);
                 r.received_once(_union, type.state);
-                
+
                 if (type.forward)
                 {
                     // 转发包中有一个 ip 头

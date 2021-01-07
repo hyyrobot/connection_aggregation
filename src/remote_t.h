@@ -4,8 +4,6 @@
 #include "device_t.h"
 #include "connection_t.h"
 
-#include <netinet/in.h>
-
 #include <string>
 #include <chrono>
 #include <queue>

@@ -7,18 +7,9 @@
 #include <sys/un.h> // sockaddr_un
 
 #include <unordered_map>
-#include <queue>
 #include <vector>
-#include <shared_mutex>
-#include <chrono>
+#include <mutex>
 #include <ostream>
-
-#define READ_LOCK(MUTEX) std::shared_lock<decltype(MUTEX)> MUTEX##_guard(MUTEX)
-#define WRITE_LOCK(MUTEX) std::unique_lock<decltype(MUTEX)> MUTEX##_guard(MUTEX)
-#define TRY_LOCK(MUTEX, WHAT)                                                 \
-    std::unique_lock<decltype(MUTEX)> MUTEX##_guard(MUTEX, std::try_to_lock); \
-    if (!MUTEX##_guard.owns_lock())                                           \
-    WHAT
 
 namespace autolabor::connection_aggregation
 {

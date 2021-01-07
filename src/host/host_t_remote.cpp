@@ -2,8 +2,6 @@
 
 #include <netinet/ip.h>
 
-#include <algorithm>
-
 namespace autolabor::connection_aggregation
 {
     void host_t::add_remote(in_addr virtual_, in_addr actual_, uint16_t port)
