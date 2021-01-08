@@ -89,7 +89,7 @@ namespace autolabor::connection_aggregation
     {
         const auto
             now = std::chrono::steady_clock::now(),
-            timeout = now + TIMEOUT;
+            timeout = now - TIMEOUT;
         auto p = _time.find(id);
         // id 不存在
         if (p == _time.end())

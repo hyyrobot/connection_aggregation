@@ -5,6 +5,8 @@
 #include <netinet/ip.h>
 #include <unistd.h>
 
+#include <iostream>
+
 namespace autolabor::connection_aggregation
 {
     void host_t::yell(in_addr dst)
@@ -25,23 +27,23 @@ namespace autolabor::connection_aggregation
 
     void host_t::send_void(in_addr dst, bool on_demand)
     {
-        uint8_t nothing = 0;
+        constexpr static uint8_t nothing = 0;
         // 未指定具体目标，向所有邻居发送握手
         if (!dst.s_addr)
             for (auto &[d, r] : _remotes)
                 for (auto k : r.filter_for_handshake(on_demand))
-                    send_single({d}, {.key = k}, &nothing, 1);
+                    send_single({d}, {k}, &nothing, 1);
         // 向指定的邻居发送握手
         else
         {
             auto p = _remotes.find(dst.s_addr);
             if (p != _remotes.end())
                 for (auto k : p->second.filter_for_handshake(on_demand))
-                    send_single(dst, {.key = k}, &nothing, 1);
+                    send_single(dst, {k}, &nothing, 1);
         }
     }
 
-    size_t host_t::send_single(
+    bool host_t::send_single(
         in_addr dst,
         connection_key_union _union,
         const uint8_t *buffer,
@@ -68,8 +70,8 @@ namespace autolabor::connection_aggregation
             .msg_iovlen = sizeof(iov) / sizeof(iovec),
         };
 
-        auto result = _devices.at(_union.pair.src_index).send(&msg);
-        if (result > 0)
+        auto result = _devices.at(_union.pair.src_index).send(&msg) == sizeof(in_addr) + size;
+        if (result)
             r.sent_once(_union);
         else
             THROW_ERRNO(__FILE__, __LINE__, "send msg from " << _union.pair.src_index);
@@ -87,19 +89,35 @@ namespace autolabor::connection_aggregation
             next = dst;
         // 发送
         auto keys = r.filter_for_forward();
-        for (auto key : keys)
-            send_single(next, {key}, buffer, size);
+        if (keys.size() > 2)
+        {
+            std::vector<std::future<bool>> results(keys.size());
+            std::transform(keys.begin(), keys.end(), results.begin(),
+                           [&](auto k) {
+                               return _threads.submit([=, this] {
+                                   return send_single(next, {k}, buffer, size);
+                               });
+                           });
+            for (auto &f : results)
+                f.wait();
+        }
+        else
+            for (auto k : keys)
+                send_single(next, {k}, buffer, size);
         return keys.size();
     }
 
-    void host_t::send(in_addr dst, uint8_t *buffer, size_t size)
+    void host_t::send(in_addr dst, uint8_t *buffer, size_t size, in_addr exclude)
     {
         auto type = reinterpret_cast<pack_type_t *>(buffer);
         auto p = _remotes.find(dst.s_addr);
         if (type->ask_route = (p == _remotes.end()))
             // 未知路由，大广播
             for (auto &[a, _] : _remotes)
-                send_strand({a}, buffer, size);
+            {
+                if (a != exclude.s_addr)
+                    send_strand({a}, buffer, size);
+            }
         else
             // 已知路由，束广播
             send_strand(dst, buffer, size);

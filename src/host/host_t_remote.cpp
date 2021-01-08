@@ -7,13 +7,13 @@ namespace autolabor::connection_aggregation
     void host_t::add_remote(in_addr virtual_, in_addr actual_, uint16_t port)
     {
         fd_guard_t temp = socket(AF_UNIX, SOCK_DGRAM, 0);
-        msg_remote_t msg{
+        cmd_remote_t msg{
             .type = ADD_REMOTE,
             .port = port,
             .virtual_ = virtual_,
             .actual_ = actual_,
         };
-        sendto(temp, &msg, sizeof(msg_remote_t), MSG_WAITALL, reinterpret_cast<sockaddr *>(&_address_un), sizeof(sockaddr_un));
+        sendto(temp, &msg, sizeof(msg), MSG_WAITALL, reinterpret_cast<sockaddr *>(&_address_un), sizeof(sockaddr_un));
     }
 
     void host_t::add_remote_inner(in_addr virtual_, in_addr actual_, uint16_t port)

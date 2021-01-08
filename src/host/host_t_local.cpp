@@ -13,7 +13,7 @@ namespace autolabor::connection_aggregation
     bool host_t::bind(device_index_t index, uint16_t port)
     {
         fd_guard_t temp(socket(AF_UNIX, SOCK_DGRAM, 0));
-        msg_bind_t msg{
+        cmd_bind_t msg{
             .type = BIND,
             .index = index,
             .port = port,
@@ -91,9 +91,9 @@ namespace autolabor::connection_aggregation
             std::cout << to_string() << std::endl;
             break;
         case BIND:
-            if (n == sizeof(msg_bind_t))
+            if (n == sizeof(cmd_bind_t))
             {
-                auto msg = reinterpret_cast<msg_bind_t *>(buffer);
+                auto msg = reinterpret_cast<cmd_bind_t *>(buffer);
                 auto p = _devices.find(msg->index);
 
                 if (p == _devices.end())
@@ -118,9 +118,9 @@ namespace autolabor::connection_aggregation
                 send_void(*reinterpret_cast<in_addr *>(buffer + 1), false);
             break;
         case ADD_REMOTE:
-            if (n == sizeof(msg_remote_t))
+            if (n == sizeof(cmd_remote_t))
             {
-                auto msg = reinterpret_cast<msg_remote_t *>(buffer);
+                auto msg = reinterpret_cast<cmd_remote_t *>(buffer);
                 add_remote_inner(msg->virtual_, msg->actual_, msg->port);
             }
             break;
@@ -135,7 +135,7 @@ namespace autolabor::connection_aggregation
         builder << _name << '(' << _index << "): " << text << " | ";
 
         if (_devices.empty())
-            builder << "devices: []" << std::endl;
+            builder << "devices: []";
         else
         {
             auto p = _devices.begin();
@@ -144,6 +144,8 @@ namespace autolabor::connection_aggregation
                 builder << ", " << p->first;
             builder << ']';
         }
+
+        builder << " | threads = " << _threads.size() << std::endl;
 
         if (_remotes.empty())
             return builder.str();

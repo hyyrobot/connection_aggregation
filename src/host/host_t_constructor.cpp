@@ -2,10 +2,11 @@
 
 #include "../ERRNO_MACRO.h"
 
-#include <fcntl.h>     // open
-#include <sys/ioctl.h> // ioctl
-#include <unistd.h>    // read
-#include <sys/epoll.h> // epoll
+#include <fcntl.h>       // open
+#include <sys/ioctl.h>   // ioctl
+#include <unistd.h>      // read
+#include <sys/epoll.h>   // epoll
+#include <sys/sysinfo.h> // get_nprocs
 #include <linux/rtnetlink.h>
 #include <linux/if_tun.h>
 
@@ -17,7 +18,8 @@ namespace autolabor::connection_aggregation
           _tun(open("/dev/net/tun", O_RDWR)),
           _unix(socket(AF_UNIX, SOCK_DGRAM, 0)),
           _address_un{.sun_family = AF_UNIX},
-          _epoll(epoll_create1(0))
+          _epoll(epoll_create1(0)),
+          _threads(get_nprocs())
     {
         // 绑定 netlink
         sockaddr_nl netlink{

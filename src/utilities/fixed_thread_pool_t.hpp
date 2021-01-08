@@ -3,6 +3,7 @@
 
 #include <thread>
 #include <condition_variable>
+#include <future>
 #include <functional>
 #include <queue>
 
@@ -10,7 +11,8 @@ class fixed_thread_pool_t
 {
 public:
     explicit fixed_thread_pool_t(size_t thread_count)
-        : _data(std::make_shared<data_t>())
+        : _data(std::make_shared<data_t>()),
+          _size(thread_count)
     {
         for (; thread_count; --thread_count)
             std::thread([data = _data] {
@@ -33,7 +35,6 @@ public:
             }).detach();
     }
 
-    fixed_thread_pool_t() = default;
     fixed_thread_pool_t(fixed_thread_pool_t &&) noexcept = default;
 
     ~fixed_thread_pool_t()
@@ -47,14 +48,31 @@ public:
         _data->cv.notify_all();
     }
 
+    size_t size() const
+    {
+        return _size;
+    }
+
     template <class F>
-    void execute(F &&task)
+    void launch(F &&task)
     {
         {
-            std::lock_guard<std::mutex> lk(data_->mutex);
+            std::lock_guard<std::mutex> lk(_data->mutex);
             _data->tasks.emplace(std::forward<F>(task));
         }
         _data->cv.notify_one();
+    }
+
+    template <class F>
+    auto submit(F &&f) -> std::future<decltype(f())>
+    {
+        auto task = std::make_shared<std::packaged_task<decltype(f())()>>(std::forward<F>(f));
+        {
+            std::lock_guard<std::mutex> lk(_data->mutex);
+            _data->tasks.emplace([task] { (*task)(); });
+        }
+        _data->cv.notify_one();
+        return task->get_future();
     }
 
 private:
@@ -67,6 +85,7 @@ private:
         bool is_shutdown = false;
     };
     std::shared_ptr<data_t> _data;
+    size_t _size;
 };
 
 #endif // FIXED_THREAD_POOL_T_H

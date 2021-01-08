@@ -2,11 +2,10 @@
 
 #include "../ERRNO_MACRO.h"
 
+#include <arpa/inet.h>
 #include <netinet/ip.h>
 #include <sys/epoll.h>
 #include <unistd.h>
-
-#include <iostream>
 
 uint16_t static checksum(const void *data, size_t n)
 {
@@ -44,11 +43,11 @@ namespace autolabor::connection_aggregation
         if (ip_->ip_dst.s_addr == _address.s_addr)
             auto _ = write(_tun, buffer, n);
         // 多播唯一 id 写到原 sum 位置，重置 ttl
-        ip_->ip_sum = _id++;
+        ip_->ip_sum = _id_s++;
         ip_->ip_ttl = MAX_TTL;
         *reinterpret_cast<pack_type_t *>(&ip_->ip_id) = {.multiple = true, .forward = true};
         // 发送
-        send(ip_->ip_dst, buffer + sizeof(in_addr), n - sizeof(in_addr));
+        send(ip_->ip_dst, buffer + sizeof(in_addr), n - sizeof(in_addr), {});
     }
 
     void host_t::read_from_device(device_index_t index, uint8_t *buffer, size_t size)
@@ -80,15 +79,16 @@ namespace autolabor::connection_aggregation
         {
             // 转发包中有一个 ip 头
             auto ip_ = reinterpret_cast<ip *>(buffer);
+            // 如果经过中转，更新路由表
+            if (auto distance = MAX_TTL - ip_->ip_ttl)
+                add_route(ip_->ip_src, source, distance);
+
             // 用于去重的连接束序号存在 sum 处
-            if (!type.multiple || r.check_unique(ip_->ip_sum))
+            if (!type.multiple || _remotes.at(ip_->ip_src.s_addr).check_unique(ip_->ip_sum))
             {
                 // 如果目的是本机
                 if (ip_->ip_dst.s_addr == _address.s_addr)
                 {
-                    // 如果经过中转，更新路由表
-                    if (auto distance = MAX_TTL - ip_->ip_ttl)
-                        add_route(ip_->ip_src, source, distance);
                     // 恢复 ip 包
                     ip_->ip_v = 4;
                     ip_->ip_hl = 5;
@@ -104,7 +104,7 @@ namespace autolabor::connection_aggregation
                 {
                     // 如果跳数没有归零，转发
                     if (--ip_->ip_ttl)
-                        send(ip_->ip_dst, buffer + sizeof(in_addr), n - sizeof(in_addr));
+                        send(ip_->ip_dst, buffer + sizeof(in_addr), n - sizeof(in_addr), source);
                     // 如果包含路由请求
                     if (type.ask_route)
                     {
@@ -115,7 +115,7 @@ namespace autolabor::connection_aggregation
                             msg_route_t msg{
                                 .type{.multiple = true, .special = true},
                                 .distance = p->second.distance(),
-                                .id = _id++,
+                                .id = _id_s++,
                                 .which = ip_->ip_dst,
                             };
                             send_strand(source, reinterpret_cast<uint8_t *>(&msg), sizeof(msg));

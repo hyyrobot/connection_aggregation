@@ -2,13 +2,14 @@
 #define HOST_T_H
 
 #include "remote_t.h"
+#include "utilities/fixed_thread_pool_t.hpp"
 
 #include <linux/if.h>
 #include <sys/un.h> // sockaddr_un
 
 #include <unordered_map>
 #include <vector>
-#include <mutex>
+#include <shared_mutex>
 #include <ostream>
 
 namespace autolabor::connection_aggregation
@@ -51,19 +52,24 @@ namespace autolabor::connection_aggregation
             ADD_REMOTE,
         };
 
-        struct msg_remote_t
+        // 指令：创建直连路由
+        struct cmd_remote_t
         {
-            uint8_t type, zero;
+            unix_t type;
+            uint8_t zero;
             uint16_t port;
             in_addr virtual_, actual_;
         };
 
-        struct msg_bind_t
+        // 指令：绑定端口
+        struct cmd_bind_t
         {
-            uint8_t type, zero;
+            unix_t type;
+            uint8_t zero;
             uint16_t index, port;
         };
 
+        // 在主机间传递路由信息
         struct msg_route_t
         {
             pack_type_t type;
@@ -80,19 +86,24 @@ namespace autolabor::connection_aggregation
 
         std::mutex _receiving;
         fd_guard_t _netlink, _tun, _unix, _epoll;
+        fixed_thread_pool_t _threads;
+
+        char _name[IFNAMSIZ];
+        device_index_t _index;
+        in_addr _address;
+
+        std::atomic_uint16_t _id_s{};
+        sockaddr_un _address_un;
 
         std::string to_string() const;
 
         // 向 netlink 发送查询网卡请求
         void send_list_request() const;
 
-        sockaddr_un _address_un;
         void read_tun(uint8_t *, size_t);
         void read_unix(uint8_t *, size_t);
         void read_netlink(uint8_t *, size_t);
         void read_from_device(device_index_t, uint8_t *, size_t);
-
-        std::atomic_uint16_t _id{};
 
         void send_void(in_addr, bool);
         void add_route(in_addr, in_addr, uint8_t);
@@ -101,13 +112,9 @@ namespace autolabor::connection_aggregation
         void device_added(device_index_t, const char *);
         void device_removed(device_index_t);
 
-        size_t send_single(in_addr, connection_key_union, const uint8_t *, size_t);
+        bool send_single(in_addr, connection_key_union, const uint8_t *, size_t);
         size_t send_strand(in_addr, const uint8_t *, size_t);
-        void send(in_addr, uint8_t *, size_t);
-
-        char _name[IFNAMSIZ];
-        device_index_t _index;
-        in_addr _address;
+        void send(in_addr, uint8_t *, size_t, in_addr);
     };
 
 } // namespace autolabor::connection_aggregation

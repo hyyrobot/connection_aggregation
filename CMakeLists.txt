@@ -14,7 +14,7 @@ add_library(kernel
     src/fd_guard_t.h
     src/fd_guard_t.cpp
     # 线程池
-    src/utilities/thread_pool.hpp
+    src/utilities/fixed_thread_pool_t.hpp
     # 本机网卡
     src/device_t.h
     src/device_t.cpp
