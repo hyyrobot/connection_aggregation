@@ -19,6 +19,9 @@ add_library(kernel
     # 连接
     src/connection_t.h
     src/connection_t.cpp
+    # 远程主机
+    src/remote_t.h
+    src/remote_t.cpp
     # 主机
     src/host_t.h
     src/host/host_t_constructor.cpp
@@ -26,7 +29,6 @@ add_library(kernel
     src/host/host_t_remote.cpp
     src/host/host_t_send.cpp
     src/host/host_t_receive.cpp
-    src/host/host_t_access.cpp
 )
 
 find_package(Threads)
