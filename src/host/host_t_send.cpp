@@ -80,16 +80,16 @@ namespace autolabor::connection_aggregation
 
     size_t host_t::send_strand(in_addr dst, const uint8_t *buffer, size_t size)
     {
-        auto &r = _remotes.at(dst.s_addr);
+        auto r = &_remotes.at(dst.s_addr);
         // 查询路由表
-        auto next = r.next();
+        auto next = r->next();
         if (next.s_addr)
-            r = _remotes.at(next.s_addr);
+            r = &_remotes.at(next.s_addr);
         else
             next = dst;
         // 发送
-        auto keys = r.filter_for_forward();
-        if (keys.size() > 2)
+        auto keys = r->filter_for_forward();
+        if (keys.size() > 2 && _threads.size() > 2)
         {
             std::vector<std::future<bool>> results(keys.size());
             std::transform(keys.begin(), keys.end(), results.begin(),

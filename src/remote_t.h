@@ -85,6 +85,8 @@ namespace autolabor::connection_aggregation
 
         std::string to_string() const;
 
+        uint16_t seq;
+
     private:
         using stamp_t = std::chrono::steady_clock::time_point;
         struct strand_t

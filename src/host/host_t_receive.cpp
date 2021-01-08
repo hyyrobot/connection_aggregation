@@ -7,6 +7,8 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 
+#include <iostream>
+
 uint16_t static checksum(const void *data, size_t n)
 {
     auto p = reinterpret_cast<const uint16_t *>(data);
@@ -23,6 +25,13 @@ uint16_t static checksum(const void *data, size_t n)
     sum = p[0] + p[1];
 
     return ~p[0];
+}
+
+std::ostream &operator<<(std::ostream &out, in_addr a)
+{
+    char text[16];
+    inet_ntop(AF_INET, &a, text, sizeof(text));
+    return out << text;
 }
 
 namespace autolabor::connection_aggregation
@@ -79,13 +88,22 @@ namespace autolabor::connection_aggregation
         {
             // 转发包中有一个 ip 头
             auto ip_ = reinterpret_cast<ip *>(buffer);
+            if (ip_->ip_src.s_addr == _address.s_addr)
+                return;
             // 如果经过中转，更新路由表
             if (auto distance = MAX_TTL - ip_->ip_ttl)
                 add_route(ip_->ip_src, source, distance);
+            //
+            auto &o = _remotes.at(ip_->ip_src.s_addr);
 
             // 用于去重的连接束序号存在 sum 处
-            if (!type.multiple || _remotes.at(ip_->ip_src.s_addr).check_unique(ip_->ip_sum))
+            if (!type.multiple || o.check_unique(ip_->ip_sum))
             {
+                std::cout << ip_->ip_src << ' ' << index << ' ' << ip_->ip_sum;
+                if (std::exchange(o.seq, ip_->ip_sum) > ip_->ip_sum)
+                    std::cout << " <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<";
+                std::cout << std::endl;
+
                 // 如果目的是本机
                 if (ip_->ip_dst.s_addr == _address.s_addr)
                 {

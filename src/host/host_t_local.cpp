@@ -164,7 +164,7 @@ namespace autolabor::connection_aggregation
             for (auto &c : buffer)
                 if (!c)
                     c = ' ';
-            builder << buffer << std::endl;
+            builder << buffer;
         }
         return builder.str();
     }
