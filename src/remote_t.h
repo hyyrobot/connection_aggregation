@@ -7,6 +7,8 @@
 #include <string>
 #include <chrono>
 #include <queue>
+#include <list>
+#include <vector>
 #include <unordered_map>
 
 namespace autolabor::connection_aggregation
@@ -21,6 +23,31 @@ namespace autolabor::connection_aggregation
             ask_route : 1, // 要求响应路由查询
             special : 1;   // 具有内部功能
     };
+
+    enum type0_enum : uint8_t
+    {
+        FORWARD,
+        SPECIAL,
+    };
+
+    struct type0_t
+    {
+        type0_enum
+            type : 2;
+        uint8_t
+            state : 2,
+            ttl : 4;
+    };
+
+    struct aggregator_t
+    {
+        in_addr source;
+        type0_t type;
+        uint8_t data[3];
+        uint16_t id0, id1;
+    };
+
+    static_assert(sizeof(aggregator_t) == 12);
 
     // 连接表示法
     union connection_key_union
@@ -59,6 +86,10 @@ namespace autolabor::connection_aggregation
         // 检查接收 id 唯一性
         bool check_unique(uint16_t);
 
+        // 换出缓存
+        std::vector<std::vector<uint8_t>>
+        exchange(const uint8_t *, size_t);
+
         // 通过某个连接发送计数
         size_t sent_once(connection_key_union);
 
@@ -78,14 +109,13 @@ namespace autolabor::connection_aggregation
         // 填写目标连接地址和状态
         bool set_address_and_state(connection_key_union, in_addr *, pack_type_t *) const;
 
+        // 显示格斯
         constexpr static auto
             TITLE = "|      host       | index |  port  |     address     | state | input | output | counter |",
             _____ = "| --------------- | ----- | ------ | --------------- | ----- | ----- | ------ | ------- |",
             SPACE = "|                 |       |        |                 |  -->  |       |        |         |";
 
         std::string to_string() const;
-
-        uint16_t seq;
 
     private:
         using stamp_t = std::chrono::steady_clock::time_point;
@@ -96,10 +126,15 @@ namespace autolabor::connection_aggregation
         };
 
         // 去重
-        constexpr static auto TIMEOUT = std::chrono::seconds(2);
+        constexpr static auto TIMEOUT0 = std::chrono::milliseconds(3000);
+        constexpr static auto TIMEOUT1 = std::chrono::milliseconds(50);
 
         std::queue<uint16_t> _id;
         std::unordered_map<uint16_t, stamp_t> _time;
+        uint16_t _seq;
+        std::list<std::vector<uint8_t>> _buffer;
+
+        bool check_timeout(uint16_t, stamp_t) const;
 
         // 路由
         uint8_t _distance;

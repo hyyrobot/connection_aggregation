@@ -6,7 +6,7 @@
 
 namespace autolabor::connection_aggregation
 {
-    remote_t::remote_t() : _distance(-1), _union{} {}
+    remote_t::remote_t() : _distance(-1), _union{}, _seq(-1) {}
 
     remote_t::~remote_t()
     {
@@ -89,7 +89,7 @@ namespace autolabor::connection_aggregation
     {
         const auto
             now = std::chrono::steady_clock::now(),
-            timeout = now - TIMEOUT;
+            timeout = now - TIMEOUT0;
         auto p = _time.find(id);
         // id 不存在
         if (p == _time.end())
@@ -119,6 +119,170 @@ namespace autolabor::connection_aggregation
             _time.erase(it);
         }
         return true;
+    }
+
+    bool remote_t::check_timeout(uint16_t id, stamp_t timeout) const
+    {
+        auto p = _time.find(id);
+        if (p == _time.end())
+            return true;
+        return p->second <= timeout;
+    }
+
+    // 换出缓存
+    std::vector<std::vector<uint8_t>>
+    remote_t::exchange(const uint8_t *data, size_t size)
+    {
+        const auto
+            now = std::chrono::steady_clock::now(),
+            id_timeout = now - TIMEOUT0,
+            data_timeout = now - TIMEOUT1;
+
+#define ID(DATA, N) reinterpret_cast<const aggregator_t *>(DATA)->id##N // 获取数据报中的序号
+        // ------------------------------------------------------------- 去重
+        auto duplicate = false;
+        if (!data)
+            // 如果没有生产新的数据，就如同生产了重复的数据
+            duplicate = true;
+        else
+        {
+            // 检查是否发生重复
+            auto id = ID(data, 1);
+            auto p = _time.find(id);
+            // id 不存在
+            if (p == _time.end())
+            {
+                _time.emplace(id, now);
+                _id.push(id);
+            }
+            // id 存在但已超时
+            else if (p->second <= id_timeout)
+            {
+                // 如果这个 id 发生超时，则比这个 id 早的必然全部超时
+                // 清扫这些以节约内存
+                // 在这里清理算法更简单，更快
+                uint16_t pop;
+                while ((pop = _id.front()) != id)
+                {
+                    _id.pop();
+                    _time.erase(pop);
+                }
+                // id 出现在队尾，更新时间
+                _id.pop();
+                _id.push(id);
+                p->second = now;
+            }
+            // id 重复
+            else
+                duplicate = true;
+        }
+        // 无论是否有效，利用调用机会清扫所有超时的记录以节约内存
+        // 在这里清理更复杂，需要每个分别判断超时
+        // it 引发变量冲突，缩小作用域消除歧义
+        {
+            decltype(_time.end()) it;
+            while ((it = _time.find(_id.front()))->second <= id_timeout)
+            {
+                _id.pop();
+                _time.erase(it);
+            }
+        }
+        // ------------------------------------------------------------- 消费缓存
+        // 缓存为空
+        if (_buffer.empty())
+        {
+            // 当前包也重复了，跳过
+            if (duplicate)
+                return {};
+            // 不连续，拷贝缓存
+            if (_seq != ID(data, 0))
+            {
+                std::copy(data, data + size, _buffer.emplace_back(size).data());
+                return {};
+            }
+            // 恰好连续，免拷贝
+            _seq = ID(data, 1);
+            return {std::vector<uint8_t>(0)};
+        }
+        // 在此消费缓存数据包
+        std::vector<std::vector<uint8_t>> result;
+        // 当前是否处于连续输出状态
+        // 既可以从缓存头部消费的状态
+        // 只有当前包补足了头部的缺失，
+        // 或者头部发生超时（此时先不考虑），
+        // 才有可能在初始状态处在连续输出状态
+        auto combo = _seq == ID(data, 0);
+        // 当前包是否已处理
+        // 如果发生重复就如同已处理，
+        // 如果发生恰好补足引起的连续输出状态，也说明已处理
+        auto processed = duplicate || combo;
+        // 考虑第一包的补足逻辑
+        if (combo)
+        {
+            result.emplace_back(0);
+            _seq = ID(data, 1);
+        }
+        // 判断是否因超时以连续输出状态开始
+        // 可能由于当前包恰好补足空缺，或头部超时
+        auto it = _buffer.begin();
+        combo = (combo && _seq == ID(data, 0)) || check_timeout(ID(it->data(), 1), data_timeout);
+        // at end | combo | processed | discription
+        //    v   |       |           | 不可能
+        //    x   |   x   |     x     | 有效的数据包，没能补足头部，头部也没有超时
+        //    x   |   x   |     v     | 无效的数据包
+        //    x   |   v   |     x     | 头部超时
+        //    x   |   v   |     v     | 恰好补足头部
+        while (combo)
+        {
+            // 输出
+            _seq = ID(it->data(), 1);
+            result.push_back(std::move(*it++));
+            // 连续输出状态下，当前包恰好后随迭代器
+            if (!processed && _seq == ID(data, 0))
+            {
+                _seq = ID(data, 1);
+                processed = true;
+                result.emplace_back(0);
+            }
+            // 缓存耗尽
+            if (it == _buffer.end())
+            {
+                combo = false;
+                break;
+            }
+            // 判断是否仍可输出
+            combo = _seq == ID(it->data(), 0) || check_timeout(ID(it->data(), 1), data_timeout);
+        }
+        // 无论何种情况，迭代器之前已全部输出
+        _buffer.erase(_buffer.begin(), it);
+        // at end | combo | processed | discription
+        //        |   v   |           | 不可能
+        //        |   x   |     v     | 且当前包无效或已处理
+        //    v   |   x   |     x     | 缓存耗尽，仍未找到当前包的前驱
+        //    x   |   x   |     x     | 输出中断，仍未找到当前包的前驱
+        while (!processed)
+        {
+            // 缓存已耗尽
+            if (processed = it == _buffer.end())
+                std::copy(data, data + size, _buffer.emplace_back(size).data());
+            // 当前包后随迭代器
+            else if (processed = ID(it->data(), 1) == ID(data, 0))
+                // emplace = 前插
+                std::copy(data, data + size, _buffer.emplace(++it, size)->data());
+            // 迭代器后随当前包
+            else if (processed = ID(it->data(), 0) == ID(data, 1))
+                std::copy(data, data + size, _buffer.emplace(it, size)->data());
+            // 当前包先于迭代器
+            else if (processed = ID(it->data(), 1) > ID(data, 1))
+                std::copy(data, data + size, _buffer.emplace(it, size)->data());
+            // 没能插入，迭代
+            else
+                ++it;
+        }
+#undef ID
+        // at end | combo | processed | discription
+        //        |   x   |     v     | 完成
+        return result;
     }
 
     // 通过某个连接发送计数

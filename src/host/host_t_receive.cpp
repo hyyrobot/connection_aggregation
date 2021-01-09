@@ -7,8 +7,6 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 
-#include <iostream>
-
 uint16_t static checksum(const void *data, size_t n)
 {
     auto p = reinterpret_cast<const uint16_t *>(data);
@@ -99,11 +97,6 @@ namespace autolabor::connection_aggregation
             // 用于去重的连接束序号存在 sum 处
             if (!type.multiple || o.check_unique(ip_->ip_sum))
             {
-                std::cout << ip_->ip_src << ' ' << index << ' ' << ip_->ip_sum;
-                if (std::exchange(o.seq, ip_->ip_sum) > ip_->ip_sum)
-                    std::cout << " <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<";
-                std::cout << std::endl;
-
                 // 如果目的是本机
                 if (ip_->ip_dst.s_addr == _address.s_addr)
                 {
