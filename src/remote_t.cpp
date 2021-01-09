@@ -207,21 +207,21 @@ namespace autolabor::connection_aggregation
         // 在此消费缓存数据包
         std::vector<std::vector<uint8_t>> result;
         // 当前是否处于连续输出状态
-        // 既可以从缓存头部消费的状态
-        // 只有当前包补足了头部的缺失，
+        // 即可以从缓存头部消费的状态
+        // 只有当前包有效且恰好补足了头部的缺失，
         // 或者头部发生超时（此时先不考虑），
         // 才有可能在初始状态处在连续输出状态
-        auto combo = _seq == ID(data, 0);
-        // 当前包是否已处理
-        // 如果发生重复就如同已处理，
-        // 如果发生恰好补足引起的连续输出状态，也说明已处理
-        auto processed = duplicate || combo;
+        auto combo = !duplicate && _seq == ID(data, 0);
         // 考虑第一包的补足逻辑
         if (combo)
         {
             result.emplace_back(0);
             _seq = ID(data, 1);
         }
+        // 当前包是否已处理
+        // 如果发生重复就如同已处理，
+        // 如果发生恰好补足引起的连续输出状态，也说明已处理
+        auto processed = duplicate || combo;
         // 判断是否因超时以连续输出状态开始
         // 可能由于当前包恰好补足空缺，或头部超时
         auto it = _buffer.begin();
