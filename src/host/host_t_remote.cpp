@@ -26,9 +26,4 @@ namespace autolabor::connection_aggregation
         r.add_direct(actual_, port, indices);
     }
 
-    void host_t::add_route(in_addr dst, in_addr next, uint8_t distance)
-    {
-        _remotes.try_emplace(dst.s_addr).first->second.add_route(next, distance);
-    }
-
 } // namespace autolabor::connection_aggregation

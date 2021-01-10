@@ -26,14 +26,14 @@ namespace autolabor::connection_aggregation
 
     enum type0_enum : uint8_t
     {
-        FORWARD,
-        SPECIAL,
+        SPECIAL, // 特殊功能包
+        FORWARD, // 转发
     };
 
-    struct type0_t
+    struct type1_t
     {
         type0_enum
-            type : 2;
+            type0 : 2;
         uint8_t
             state : 2,
             ttl : 4;
@@ -42,12 +42,17 @@ namespace autolabor::connection_aggregation
     struct aggregator_t
     {
         in_addr source;
-        type0_t type;
+        type1_t type1;
         uint8_t data[3];
+        // id0 用于排队，id1 用于去重
+        // id0 == 0: 只去重，不排队，用于源端开始排序前或不需要转发的包
+        // id1 绝不为 0
         uint16_t id0, id1;
+        // 用于携带路由信息，与 ip 头重合
+        in_addr ip_src;
     };
 
-    static_assert(sizeof(aggregator_t) == 12);
+    static_assert(sizeof(aggregator_t) == 16);
 
     // 连接表示法
     union connection_key_union
@@ -66,6 +71,14 @@ namespace autolabor::connection_aggregation
 
     using connection_key_t = connection_key_union::key_t;
 
+    struct sending_t
+    {
+        uint8_t state : 2;
+        device_index_t index : 14;
+        uint16_t port;
+        in_addr actual;
+    };
+
     struct remote_t
     {
         remote_t();
@@ -83,8 +96,8 @@ namespace autolabor::connection_aggregation
         // 设定到主机的路由
         bool add_route(in_addr, uint8_t);
 
-        // 检查接收 id 唯一性
-        bool check_unique(uint16_t);
+        // 交换发送 id
+        uint16_t exchange(uint16_t);
 
         // 换出缓存
         std::vector<std::vector<uint8_t>>
@@ -102,12 +115,10 @@ namespace autolabor::connection_aggregation
         // 查询距离
         uint8_t distance() const;
 
-        // 筛选连接
-        std::vector<connection_key_t> filter_for_handshake(bool on_demand) const;
-        std::vector<connection_key_t> filter_for_forward() const;
-
-        // 填写目标连接地址和状态
-        bool set_address_and_state(connection_key_union, in_addr *, pack_type_t *) const;
+        // 提取发送信息
+        std::vector<sending_t> handshake(bool) const;
+        std::vector<sending_t> forward() const;
+        sending_t sending(connection_key_union) const;
 
         // 显示格斯
         constexpr static auto
@@ -126,12 +137,12 @@ namespace autolabor::connection_aggregation
         };
 
         // 去重
-        constexpr static auto TIMEOUT0 = std::chrono::milliseconds(3000);
-        constexpr static auto TIMEOUT1 = std::chrono::milliseconds(50);
+        constexpr static auto TIMEOUT_ID = std::chrono::milliseconds(3000);
+        constexpr static auto TIMEOUT_DATA = std::chrono::milliseconds(50);
 
         std::queue<uint16_t> _id;
         std::unordered_map<uint16_t, stamp_t> _time;
-        uint16_t _seq;
+        uint16_t _id0_s, _seq;
         std::list<std::vector<uint8_t>> _buffer;
 
         bool check_timeout(uint16_t, stamp_t) const;

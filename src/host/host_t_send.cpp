@@ -31,33 +31,31 @@ namespace autolabor::connection_aggregation
         // 未指定具体目标，向所有邻居发送握手
         if (!dst.s_addr)
             for (auto &[d, r] : _remotes)
-                for (auto k : r.filter_for_handshake(on_demand))
-                    send_single({d}, {k}, &nothing, 1);
+                for (auto s : r.handshake(on_demand))
+                    send_single(s, &nothing, 1);
         // 向指定的邻居发送握手
         else
         {
             auto p = _remotes.find(dst.s_addr);
             if (p != _remotes.end())
-                for (auto k : p->second.filter_for_handshake(on_demand))
-                    send_single(dst, {k}, &nothing, 1);
+                for (auto s : p->second.handshake(on_demand))
+                    send_single(s, &nothing, 1);
         }
     }
 
     bool host_t::send_single(
-        in_addr dst,
-        connection_key_union _union,
+        sending_t sending,
         const uint8_t *buffer,
         size_t size)
     {
-        auto type = *reinterpret_cast<const pack_type_t *>(buffer);
+        auto type = *reinterpret_cast<const type1_t *>(buffer);
+        type.state = sending.state;
         sockaddr_in remote{
             .sin_family = AF_INET,
-            .sin_port = _union.pair.dst_port,
+            .sin_port = sending.port,
+            .sin_addr = sending.actual,
         };
         // 获取目的地址和连接状态
-        auto &r = _remotes.at(dst.s_addr);
-        r.set_address_and_state(_union, &remote.sin_addr, &type);
-
         iovec iov[]{
             {.iov_base = &_address, .iov_len = sizeof(in_addr)},
             {.iov_base = &type, .iov_len = 1},
@@ -70,43 +68,40 @@ namespace autolabor::connection_aggregation
             .msg_iovlen = sizeof(iov) / sizeof(iovec),
         };
 
-        auto result = _devices.at(_union.pair.src_index).send(&msg) == sizeof(in_addr) + size;
-        if (result)
-            r.sent_once(_union);
-        else
-            THROW_ERRNO(__FILE__, __LINE__, "send msg from " << _union.pair.src_index);
+        auto result = _devices.at(sending.index).send(&msg) == sizeof(in_addr) + size;
+        if (!result)
+            THROW_ERRNO(__FILE__, __LINE__, "send msg from " << sending.index);
         return result;
     }
 
     size_t host_t::send_strand(in_addr dst, const uint8_t *buffer, size_t size)
     {
-        auto r = &_remotes.at(dst.s_addr);
+        auto &r = _remotes.at(dst.s_addr);
         // 查询路由表
-        auto next = r->next();
-        if (next.s_addr)
-            r = &_remotes.at(next.s_addr);
-        else
-            next = dst;
+        auto next = r.next().s_addr;
+        auto sendings = next ? _remotes.at(next).forward()
+                             : r.forward();
         // 发送
-        auto keys = r->filter_for_forward();
-        if (keys.size() > 2 && _threads.size() > 2)
+        if (sendings.size() > 2 && _threads.size() > 2)
         {
-            std::vector<std::future<bool>> results(keys.size());
-            std::transform(keys.begin(), keys.end(), results.begin(),
-                           [&](auto k) {
+            std::vector<std::future<bool>> results(sendings.size());
+            std::transform(sendings.begin(), sendings.end(), results.begin(),
+                           [&](auto s) {
                                return _threads.submit([=, this] {
-                                   return send_single(next, {k}, buffer, size);
+                                   return send_single(s, buffer, size);
                                });
                            });
             for (auto &f : results)
                 f.wait();
         }
         else
-            for (auto k : keys)
-                send_single(next, {k}, buffer, size);
-        return keys.size();
+            for (auto s : sendings)
+                send_single(s, buffer, size);
+        return sendings.size();
     }
 
+    // 查路由表并广播
+    // - `exclude`: 对于收到并广播的包，应该排除其来源
     void host_t::send(in_addr dst, uint8_t *buffer, size_t size, in_addr exclude)
     {
         auto type = reinterpret_cast<pack_type_t *>(buffer);

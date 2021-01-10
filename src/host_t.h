@@ -37,7 +37,7 @@ namespace autolabor::connection_aggregation
 
     private:
         constexpr static uint8_t
-            MAX_TTL = 16;
+            MAX_TTL = 0b1111;
         constexpr static uint32_t
             ID_TUN = 1u << 16u,
             ID_UNIX = 2u << 16u,
@@ -92,7 +92,7 @@ namespace autolabor::connection_aggregation
         device_index_t _index;
         in_addr _address;
 
-        std::atomic_uint16_t _id_s{};
+        uint16_t _id_s{};
         sockaddr_un _address_un;
 
         std::string to_string() const;
@@ -103,16 +103,20 @@ namespace autolabor::connection_aggregation
         void read_tun(uint8_t *, size_t);
         void read_unix(uint8_t *, size_t);
         void read_netlink(uint8_t *, size_t);
-        void read_from_device(device_index_t, uint8_t *, size_t);
+        struct forward_t
+        {
+            in_addr origin;
+            uint32_t size;
+        };
+        forward_t read_from_device(device_index_t, uint8_t *, size_t);
 
         void send_void(in_addr, bool);
-        void add_route(in_addr, in_addr, uint8_t);
         void add_remote_inner(in_addr, in_addr, uint16_t);
 
         void device_added(device_index_t, const char *);
         void device_removed(device_index_t);
 
-        bool send_single(in_addr, connection_key_union, const uint8_t *, size_t);
+        bool send_single(sending_t, const uint8_t *, size_t);
         size_t send_strand(in_addr, const uint8_t *, size_t);
         void send(in_addr, uint8_t *, size_t, in_addr);
     };
