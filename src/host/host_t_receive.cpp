@@ -54,11 +54,20 @@ namespace autolabor::connection_aggregation
         header->type1 = {.type0 = FORWARD, .ttl = MAX_TTL};
         header->data[0] = ip_->ip_p;
         // header->data[1:2] = ip_->ip_off;
-        header->id1 = ++_id_s ? ++_id_s : _id_s;
+        header->id1 = ++_id_s ? _id_s : ++_id_s;
         auto p = _remotes.find(ip_->ip_dst.s_addr);
-        header->id0 = p == _remotes.end() ? 0 : p->second.exchange(header->id1);
         // 发送
-        send(ip_->ip_dst, buffer + sizeof(in_addr), n - sizeof(in_addr), {});
+        if (p == _remotes.end())
+        { // 未知路由，大广播
+            header->id0 = 0;
+            for (auto &[a, _] : _remotes)
+                send_strand({a}, buffer + sizeof(in_addr), n - sizeof(in_addr));
+        }
+        else
+        { // 已知路由，束广播
+            header->id0 = p->second.exchange(header->id1);
+            send_strand(ip_->ip_dst, buffer + sizeof(in_addr), n - sizeof(in_addr));
+        }
     }
 
     host_t::forward_t host_t::read_from_device(device_index_t index, uint8_t *const buffer, const size_t size)
@@ -71,8 +80,8 @@ namespace autolabor::connection_aggregation
             .msg_iov = &iov,
             .msg_iovlen = 1,
         };
-
         auto n = _devices.at(index).receive(&msg);
+
         connection_key_union _union{.pair{.src_index = index, .dst_port = remote.sin_port}};
 
 #define HEADER reinterpret_cast<aggregator_t *>
@@ -151,9 +160,9 @@ namespace autolabor::connection_aggregation
             }
             for (auto &[a, r] : _remotes)
             {
-                auto vectors = received.origin.s_addr == a
-                                   ? r.exchange(buffer, received.size)
-                                   : r.exchange(nullptr, 0);
+                auto focus = received.origin.s_addr == a;
+                auto vectors = focus ? r.exchange(buffer, received.size)
+                                     : r.exchange(nullptr, 0);
                 for (auto &v : vectors)
                 {
                     auto d = v.data();
@@ -182,7 +191,20 @@ namespace autolabor::connection_aggregation
                             THROW_ERRNO(__FILE__, __LINE__, "forward msg to tun")
                     }
                     else if (--HEADER(d)->type1.ttl)
-                        send(IP(d)->ip_dst, d + sizeof(in_addr), s - sizeof(in_addr), HEADER(d)->source);
+                    {
+                        auto p = _remotes.find(IP(d)->ip_dst.s_addr);
+                        // 发送
+                        if (p == _remotes.end())
+                            // 未知路由，继续向来源以外的方向广播
+                            for (auto &[a, _] : _remotes)
+                            {
+                                if (a != HEADER(d)->source.s_addr && a != HEADER(d)->ip_src.s_addr)
+                                    send_strand({a}, d + sizeof(in_addr), s - sizeof(in_addr));
+                            }
+                        else
+                            // 已知路由，束广播
+                            send_strand(IP(d)->ip_dst, d + sizeof(in_addr), s - sizeof(in_addr));
+                    }
 #undef IP
 #undef HEADER
                 }

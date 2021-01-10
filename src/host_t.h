@@ -69,15 +69,6 @@ namespace autolabor::connection_aggregation
             uint16_t index, port;
         };
 
-        // 在主机间传递路由信息
-        struct msg_route_t
-        {
-            pack_type_t type;
-            uint8_t distance;
-            uint16_t id;
-            in_addr which;
-        };
-
         // 本机网卡
         std::unordered_map<device_index_t, device_t> _devices;
 
@@ -118,7 +109,6 @@ namespace autolabor::connection_aggregation
 
         bool send_single(sending_t, const uint8_t *, size_t);
         size_t send_strand(in_addr, const uint8_t *, size_t);
-        void send(in_addr, uint8_t *, size_t, in_addr);
     };
 
 } // namespace autolabor::connection_aggregation

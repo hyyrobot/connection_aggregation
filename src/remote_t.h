@@ -13,17 +13,6 @@
 
 namespace autolabor::connection_aggregation
 {
-    struct pack_type_t
-    {
-        uint8_t
-            state : 2;
-        bool
-            multiple : 1,  // 需要去重/包含 id
-            forward : 1,   // 到达后向应用层上传
-            ask_route : 1, // 要求响应路由查询
-            special : 1;   // 具有内部功能
-    };
-
     enum type0_enum : uint8_t
     {
         SPECIAL, // 特殊功能包

@@ -6,7 +6,6 @@
 
 namespace autolabor::connection_aggregation
 {
-
     struct connection_t
     {
         struct snapshot_t
