@@ -3,10 +3,11 @@
 #include <arpa/inet.h>
 
 #include <sstream>
+#include <iostream>
 
 namespace autolabor::connection_aggregation
 {
-    remote_t::remote_t() : _distance(-1), _union{} {}
+    remote_t::remote_t() : _distance(-1), _union{}, _seq(0) {}
 
     remote_t::~remote_t()
     {
@@ -84,41 +85,210 @@ namespace autolabor::connection_aggregation
         return true;
     }
 
-    // 检查接收 id 唯一性
-    bool remote_t::check_unique(uint16_t id)
+    // 确认存在性
+    bool remote_t::scan()
+    {
+        if (_distance)
+            return true;
+
+        auto &connections = _union._strand->_connections;
+        auto &ports = _union._strand->_ports;
+
+        std::unordered_map<uint16_t, bool> count;
+        connection_t::snapshot_t snapshot;
+        // 遍历确认连接性
+        for (auto &[k, c] : connections)
+            if (c.died())
+                count.try_emplace(connection_key_union{k}.pair.dst_port, false);
+            else
+                count[connection_key_union{k}.pair.dst_port] = true;
+        // 再次遍历删除无效的连接
+        for (auto p = connections.begin(); p != connections.end();)
+            if (!count.at(connection_key_union{p->first}.pair.dst_port))
+                p = connections.erase(p);
+            else
+                ++p;
+        // 删除端口表对象
+        for (auto p = ports.begin(); p != ports.end();)
+            if (!count.at(p->first))
+                p = ports.erase(p);
+            else
+                ++p;
+        return !ports.empty();
+    }
+
+    uint16_t remote_t::exchange(uint16_t id1)
+    {
+        return std::exchange(_id0_s, id1);
+    }
+
+    bool remote_t::check_timeout(uint16_t id, stamp_t timeout) const
+    {
+        auto p = _time.find(id);
+        if (p == _time.end())
+            return true;
+        return p->second <= timeout;
+    }
+
+    // 换出缓存
+    std::vector<std::vector<uint8_t>>
+    remote_t::exchange(const uint8_t *data, size_t size)
     {
         const auto
-            now = std::chrono::steady_clock::now(),
-            timeout = now + TIMEOUT;
-        auto p = _time.find(id);
-        // id 不存在
-        if (p == _time.end())
+            now = clock::now(),
+            id_timeout = now - TIMEOUT_ID,
+            data_timeout = now - TIMEOUT_DATA;
+
+#define ID(DATA, N) reinterpret_cast<const aggregator_t *>(DATA)->id##N // 获取数据报中的序号
+        // ------------------------------------------------------------- 去重
+        auto drop_this = false;
+        if (!data)
+            // 没有生产新的报文 == 生产应丢弃的报文
+            drop_this = true;
+        else
         {
-            _time.emplace(id, now);
-            _id.push(id);
+            // 检查是否发生重复
+            auto id = ID(data, 1);
+            auto p = _time.find(id);
+            // id 不存在
+            if (p == _time.end())
+            {
+                _time.emplace(id, now);
+                _id.push(id);
+            }
+            // id 存在但已超时
+            else if (p->second <= id_timeout)
+            {
+                // 如果这个 id 发生超时，则比这个 id 早的必然全部超时
+                // 清扫这些以节约内存
+                // 在这里清理算法更简单，更快
+                uint16_t pop;
+                while ((pop = _id.front()) != id)
+                {
+                    _id.pop();
+                    _time.erase(pop);
+                }
+                // id 出现在队尾，更新时间
+                _id.pop();
+                _id.push(id);
+                p->second = now;
+            }
+            // id 重复
+            else
+                drop_this = true;
         }
-        // id 存在但已超时
-        else if (p->second < timeout)
+        // 无论是否有效，利用调用机会清扫所有超时的记录以节约内存
+        // 在这里清理更复杂，需要每个分别判断超时
+        // it 引发变量冲突，缩小作用域消除歧义
         {
-            p->second = now;
-            decltype(id) pop;
-            while ((pop = _id.front()) != id)
+            decltype(_time.end()) it;
+            while (!_id.empty() && (it = _time.find(_id.front()))->second <= id_timeout)
             {
                 _id.pop();
-                _time.erase(pop);
+                _time.erase(it);
             }
         }
-        // id 不唯一
-        else
-            return false;
-        // 清扫所有超时的
-        decltype(_time.end()) it;
-        while (!_id.empty() && (it = _time.find(_id.front()))->second < timeout)
+        // ------------------------------------------------------------- 消费缓存
+        // 缓存为空
+        if (_buffer.empty())
         {
-            _id.pop();
-            _time.erase(it);
+            // 当前包也丢弃，跳过
+            if (drop_this)
+                return {};
+            // 已排序且不连续，拷贝缓存
+            if (_seq && ID(data, 0) && _seq != ID(data, 0))
+            {
+                std::copy(data, data + size, _buffer.emplace_back(size).data());
+                return {};
+            }
+            // 源已排序且连续，免拷贝
+            if (ID(data, 0))
+                _seq = ID(data, 1);
+            return {std::vector<uint8_t>(0)};
         }
-        return true;
+        // 在此消费缓存数据包
+        std::vector<std::vector<uint8_t>> result;
+        // 源未排序
+        const auto no_order = !drop_this && !ID(data, 0);
+        // 当前是否处于连续输出状态
+        // 即可以从缓存头部消费的状态
+        // 只有当前包有效且恰好补足了头部的缺失，
+        // 或者头部发生超时（此时先不考虑），
+        // 才有可能在初始状态处在连续输出状态
+        // 缓存不为空时，源未排序的包不可能排队
+        auto combo = !drop_this && _seq == ID(data, 0);
+        // 如果源未排序，避免拷贝
+        if (no_order)
+            result.emplace_back(0);
+        // 发生当前包补足头部
+        else if (combo)
+        {
+            result.emplace_back(0);
+            _seq = ID(data, 1);
+        }
+        // 当前包是否已处理
+        auto processed = drop_this || no_order || combo;
+        // 判断是否因超时以连续输出状态开始
+        // 可能由于当前包恰好补足空缺，或头部超时
+        auto it = _buffer.begin();
+        combo = (combo && _seq == ID(it->data(), 0)) || check_timeout(ID(it->data(), 1), data_timeout);
+        // at end | combo | processed | discription
+        //    v   |       |           | 不可能
+        //    x   |   x   |     x     | 有效的数据包，没能补足头部，头部也没有超时
+        //    x   |   x   |     v     | 无效的数据包
+        //    x   |   v   |     x     | 头部超时
+        //    x   |   v   |     v     | 恰好补足头部
+        while (combo)
+        {
+            // 输出
+            _seq = ID(it->data(), 1);
+            result.push_back(std::move(*it++));
+            // 连续输出状态下，当前包恰好后随迭代器
+            if (!processed && _seq == ID(data, 0))
+            {
+                _seq = ID(data, 1);
+                processed = true;
+                result.emplace_back(0);
+            }
+            // 缓存耗尽
+            if (it == _buffer.end())
+            {
+                combo = false;
+                break;
+            }
+            // 判断是否仍可输出
+            combo = _seq == ID(it->data(), 0) || check_timeout(ID(it->data(), 1), data_timeout);
+        }
+        // 无论何种情况，迭代器之前已全部输出
+        _buffer.erase(_buffer.begin(), it);
+        // at end | combo | processed | discription
+        //        |   v   |           | 不可能
+        //        |   x   |     v     | 且当前包无效或已处理
+        //    v   |   x   |     x     | 缓存耗尽，仍未找到当前包的前驱
+        //    x   |   x   |     x     | 输出中断，仍未找到当前包的前驱
+        while (!processed)
+        {
+            // 缓存已耗尽
+            if (processed = it == _buffer.end())
+                std::copy(data, data + size, _buffer.emplace_back(size).data());
+            // 当前包后随迭代器
+            else if (processed = ID(it->data(), 1) == ID(data, 0))
+                // emplace = 前插
+                std::copy(data, data + size, _buffer.emplace(++it, size)->data());
+            // 迭代器后随当前包
+            else if (processed = ID(it->data(), 0) == ID(data, 1))
+                std::copy(data, data + size, _buffer.emplace(it, size)->data());
+            // 当前包先于迭代器
+            else if (processed = ID(it->data(), 1) > ID(data, 1))
+                std::copy(data, data + size, _buffer.emplace(it, size)->data());
+            // 没能插入，迭代
+            else
+                ++it;
+        }
+#undef ID
+        // at end | combo | processed | discription
+        //        |   x   |     v     | 完成
+        return result;
     }
 
     // 通过某个连接发送计数
@@ -145,65 +315,101 @@ namespace autolabor::connection_aggregation
         return _distance;
     }
 
-    // 筛选连接
-
-    std::vector<connection_key_t>
-    remote_t::filter_for_handshake(bool on_demand) const
+    std::vector<sending_t> remote_t::handshake(bool on_demand) const
     {
         if (_distance)
             return {};
-        std::vector<connection_key_t> result;
+        std::vector<sending_t> result;
         auto &connections = _union._strand->_connections;
+        auto &ports = _union._strand->_ports;
         if (on_demand)
         { // 按需发送握手
             for (auto &[k, c] : connections)
                 if (c.need_handshake())
-                    result.push_back(k);
+                {
+                    auto pair = connection_key_union{k}.pair;
+                    c.sent_once();
+                    result.push_back(sending_t{
+                        .state = c.state(),
+                        .index = pair.src_index,
+                        .port = pair.dst_port,
+                        .actual = ports.at(pair.dst_port),
+                    });
+                }
         }
         else
         { // 向所有连接发送握手
             result.resize(connections.size());
             auto p = connections.begin();
             for (auto q = result.begin(); q != result.end(); ++p, ++q)
-                *q = p->first;
+            {
+                auto pair = connection_key_union{p->first}.pair;
+                p->second.sent_once();
+                *q = {
+                    .state = p->second.state(),
+                    .index = pair.src_index,
+                    .port = pair.dst_port,
+                    .actual = ports.at(pair.dst_port),
+                };
+            }
         }
         return result;
     }
 
-    std::vector<connection_key_t>
-    remote_t::filter_for_forward() const
+    std::vector<sending_t> remote_t::forward() const
     {
         if (_distance)
             return {};
-        std::vector<connection_key_t> result;
+        std::vector<sending_t> result;
         auto max = 0;
-        for (const auto &[k, c] : _union._strand->_connections)
+        auto &connections = _union._strand->_connections;
+        auto &ports = _union._strand->_ports;
+        for (const auto &[k, c] : connections)
         {
             auto s_ = c.state();
+            auto pair = connection_key_union{k}.pair;
             if (s_ < max)
                 continue;
             if (s_ > max)
             {
                 max = s_;
                 result.resize(1);
-                result[0] = k;
+                result[0] = {
+                    .state = s_,
+                    .index = pair.src_index,
+                    .port = pair.dst_port,
+                    .actual = ports.at(pair.dst_port),
+                };
             }
             else
-                result.push_back(k);
+                result.push_back(sending_t{
+                    .state = s_,
+                    .index = pair.src_index,
+                    .port = pair.dst_port,
+                    .actual = ports.at(pair.dst_port),
+                });
         }
+        for (auto &s : result)
+            connections.at(connection_key_union{.pair{s.index, s.port}}.key).sent_once();
         return result;
     }
 
-    // 填写目标连接地址和状态
-    bool remote_t::set_address_and_state(connection_key_union key, in_addr *address, pack_type_t *type) const
+    sending_t remote_t::sending(connection_key_union key) const
     {
-        auto s = _union._strand;
-        auto p = s->_ports.find(key.pair.dst_port);
-        if (p == s->_ports.end())
-            return false;
-        *address = p->second;
-        type->state = s->_connections.at(key.key).state();
-        return true;
+        if (_distance)
+            return {};
+        auto &connections = _union._strand->_connections;
+        auto &ports = _union._strand->_ports;
+        auto p = connections.find(key.key);
+        if (p == connections.end())
+            return {};
+        auto pair = key.pair;
+        return {
+            .state = p->second.state(),
+            .index = pair.src_index,
+            .port = pair.dst_port,
+            .actual = ports.at(pair.dst_port),
+        };
     }
 
     std::string remote_t::to_string() const

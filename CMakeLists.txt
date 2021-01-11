@@ -13,6 +13,8 @@ add_library(kernel
     # RAII 文件描述符
     src/fd_guard_t.h
     src/fd_guard_t.cpp
+    # 线程池
+    src/utilities/fixed_thread_pool_t.hpp
     # 本机网卡
     src/device_t.h
     src/device_t.cpp

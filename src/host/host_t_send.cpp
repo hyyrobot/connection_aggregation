@@ -9,7 +9,7 @@ namespace autolabor::connection_aggregation
 {
     void host_t::yell(in_addr dst)
     {
-        fd_guard_t temp = socket(AF_UNIX, SOCK_DGRAM, 0);
+        fd_guard_t temp(socket(AF_UNIX, SOCK_DGRAM, 0));
         if (!dst.s_addr)
         {
             constexpr static uint8_t msg = YELL;
@@ -25,37 +25,62 @@ namespace autolabor::connection_aggregation
 
     void host_t::send_void(in_addr dst, bool on_demand)
     {
-        uint8_t nothing = 0;
+        constexpr static uint8_t nothing = 0;
         // 未指定具体目标，向所有邻居发送握手
         if (!dst.s_addr)
             for (auto &[d, r] : _remotes)
-                for (auto k : r.filter_for_handshake(on_demand))
-                    send_single({d}, {.key = k}, &nothing, 1);
+                for (auto s : r.handshake(on_demand))
+                    _threads.launch([=, this] { send_single(s, &nothing, 1); });
         // 向指定的邻居发送握手
         else
         {
             auto p = _remotes.find(dst.s_addr);
             if (p != _remotes.end())
-                for (auto k : p->second.filter_for_handshake(on_demand))
-                    send_single(dst, {.key = k}, &nothing, 1);
+                for (auto s : p->second.handshake(on_demand))
+                    _threads.launch([=, this] { send_single(s, &nothing, 1); });
         }
     }
 
-    size_t host_t::send_single(
-        in_addr dst,
-        connection_key_union _union,
+    size_t host_t::send_strand(in_addr dst, const uint8_t *buffer, size_t size)
+    {
+        auto &r = _remotes.at(dst.s_addr);
+        // 查询路由表
+        auto next = r.next().s_addr;
+        auto sendings = next ? _remotes.at(next).forward()
+                             : r.forward();
+        // 发送
+        if (sendings.size() > 2 && _threads.size() > 2)
+        {
+            std::vector<std::future<bool>> results(sendings.size());
+            std::transform(sendings.begin(), sendings.end(), results.begin(),
+                           [&](auto s) {
+                               return _threads.submit([=, this] {
+                                   return send_single(s, buffer, size);
+                               });
+                           });
+            for (auto &f : results)
+                f.wait();
+        }
+        else
+            for (auto s : sendings)
+                send_single(s, buffer, size);
+        return sendings.size();
+    }
+
+    // 通过单独的连接发送
+    // NOTICE 不要在这里访问 _remotes
+    bool host_t::send_single(
+        sending_t sending,
         const uint8_t *buffer,
         size_t size)
     {
-        auto type = *reinterpret_cast<const pack_type_t *>(buffer);
+        auto type = *reinterpret_cast<const type1_t *>(buffer);
+        type.state = sending.state;
         sockaddr_in remote{
             .sin_family = AF_INET,
-            .sin_port = _union.pair.dst_port,
+            .sin_port = sending.port,
+            .sin_addr = sending.actual,
         };
-        // 获取目的地址和连接状态
-        auto &r = _remotes.at(dst.s_addr);
-        r.set_address_and_state(_union, &remote.sin_addr, &type);
-
         iovec iov[]{
             {.iov_base = &_address, .iov_len = sizeof(in_addr)},
             {.iov_base = &type, .iov_len = 1},
@@ -68,41 +93,10 @@ namespace autolabor::connection_aggregation
             .msg_iovlen = sizeof(iov) / sizeof(iovec),
         };
 
-        auto result = _devices.at(_union.pair.src_index).send(&msg);
-        if (result > 0)
-            r.sent_once(_union);
-        else
-            THROW_ERRNO(__FILE__, __LINE__, "send msg from " << _union.pair.src_index);
+        auto result = _devices.at(sending.index).send(&msg) == sizeof(in_addr) + size;
+        if (!result)
+            THROW_ERRNO(__FILE__, __LINE__, "send msg from " << sending.index);
         return result;
-    }
-
-    size_t host_t::send_strand(in_addr dst, const uint8_t *buffer, size_t size)
-    {
-        auto &r = _remotes.at(dst.s_addr);
-        // 查询路由表
-        auto next = r.next();
-        if (next.s_addr)
-            r = _remotes.at(next.s_addr);
-        else
-            next = dst;
-        // 发送
-        auto keys = r.filter_for_forward();
-        for (auto key : keys)
-            send_single(next, {key}, buffer, size);
-        return keys.size();
-    }
-
-    void host_t::send(in_addr dst, uint8_t *buffer, size_t size)
-    {
-        auto type = reinterpret_cast<pack_type_t *>(buffer);
-        auto p = _remotes.find(dst.s_addr);
-        if (type->ask_route = (p == _remotes.end()))
-            // 未知路由，大广播
-            for (auto &[a, _] : _remotes)
-                send_strand({a}, buffer, size);
-        else
-            // 已知路由，束广播
-            send_strand(dst, buffer, size);
     }
 
 } // namespace autolabor::connection_aggregation

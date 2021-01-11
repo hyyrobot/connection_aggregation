@@ -138,6 +138,6 @@ bool script(host_t &h, const std::list<std::string> &commands)
         }
         break;
     }
-    std::cout << "known command" << std::endl;
+    std::cout << "unknown command" << std::endl;
     return true;
 }
