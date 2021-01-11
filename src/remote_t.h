@@ -85,6 +85,9 @@ namespace autolabor::connection_aggregation
         // 设定到主机的路由
         bool add_route(in_addr, uint8_t);
 
+        // 确认存在性
+        bool scan();
+
         // 交换发送 id
         uint16_t exchange(uint16_t);
 

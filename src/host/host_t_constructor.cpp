@@ -21,6 +21,8 @@ namespace autolabor::connection_aggregation
           _epoll(epoll_create1(0)),
           _threads(get_nprocs())
     {
+        if (!address.s_addr)
+            throw std::runtime_error("address cannot be 0.0.0.0");
         // 绑定 netlink
         sockaddr_nl netlink{
             .nl_family = AF_NETLINK,
@@ -37,8 +39,8 @@ namespace autolabor::connection_aggregation
         std::strcpy(_name, request.ifr_name);
         // 启动 tun 并配置 ip 地址
         uint32_t wait_tun_index(const fd_guard_t &, const char *);
-        void config_tun(const fd_guard_t &, uint32_t, in_addr);
-        config_tun(_netlink, _index = wait_tun_index(_netlink, _name), _address);
+        _index = wait_tun_index(_netlink, _name);
+        config_tun();
         // 绑定本机控制接口
         std::strcpy(_address_un.sun_path, _name);
         std::strcpy(_address_un.sun_path + std::strlen(_name), ".interface");
@@ -83,7 +85,7 @@ namespace autolabor::connection_aggregation
     }
 
     constexpr static sockaddr_nl KERNEL{.nl_family = AF_NETLINK};
-    void config_tun(const fd_guard_t &fd, uint32_t index, in_addr address)
+    void host_t::config_tun() const
     {
         // 设置网卡到启动状态的请求包
         struct
@@ -98,7 +100,7 @@ namespace autolabor::connection_aggregation
             },
             .message{
                 .ifi_family = AF_UNSPEC,
-                .ifi_index = static_cast<int>(index),
+                .ifi_index = static_cast<int>(_index),
                 .ifi_flags = IFF_UP | IFF_NOARP | IFF_MULTICAST | IFF_BROADCAST,
                 .ifi_change = 0xffffffff, // 这是一个无用的常量，必修填全 1
             }};
@@ -118,15 +120,15 @@ namespace autolabor::connection_aggregation
                 .nlmsg_seq = 1,
             },
             .message{
-                .ifa_family = AF_INET, // 协议簇
-                .ifa_prefixlen = 24,   // 子网长度
-                .ifa_index = static_cast<unsigned>(index),
+                .ifa_family = AF_INET,          // 协议簇
+                .ifa_prefixlen = SUBNET_PREFIX, // 子网长度
+                .ifa_index = static_cast<unsigned>(_index),
             },
             .attributes{
                 .rta_len = sizeof(rtattr) + sizeof(request_address.address),
                 .rta_type = IFA_LOCAL,
             },
-            .address = address,
+            .address = _address,
         };
 
         iovec iov[]{
@@ -140,7 +142,7 @@ namespace autolabor::connection_aggregation
             .msg_iovlen = sizeof(iov) / sizeof(iovec),
         };
 
-        if (!sendmsg(fd, &msg, MSG_WAITALL))
+        if (!sendmsg(_netlink, &msg, MSG_WAITALL))
             THROW_ERRNO(__FILE__, __LINE__, "set ip to tun")
     }
 

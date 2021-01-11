@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 
 #include <sstream>
+#include <iostream>
 
 namespace autolabor::connection_aggregation
 {
@@ -82,6 +83,38 @@ namespace autolabor::connection_aggregation
         _union._next = next;
         _distance = distance;
         return true;
+    }
+
+    // 确认存在性
+    bool remote_t::scan()
+    {
+        if (_distance)
+            return true;
+
+        auto &connections = _union._strand->_connections;
+        auto &ports = _union._strand->_ports;
+
+        std::unordered_map<uint16_t, bool> count;
+        connection_t::snapshot_t snapshot;
+        // 遍历确认连接性
+        for (auto &[k, c] : connections)
+            if (c.died())
+                count.try_emplace(connection_key_union{k}.pair.dst_port, false);
+            else
+                count[connection_key_union{k}.pair.dst_port] = true;
+        // 再次遍历删除无效的连接
+        for (auto p = connections.begin(); p != connections.end();)
+            if (!count.at(connection_key_union{p->first}.pair.dst_port))
+                p = connections.erase(p);
+            else
+                ++p;
+        // 删除端口表对象
+        for (auto p = ports.begin(); p != ports.end();)
+            if (!count.at(p->first))
+                p = ports.erase(p);
+            else
+                ++p;
+        return !ports.empty();
     }
 
     uint16_t remote_t::exchange(uint16_t id1)

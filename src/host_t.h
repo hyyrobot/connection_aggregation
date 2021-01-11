@@ -39,6 +39,10 @@ namespace autolabor::connection_aggregation
 
     private:
         constexpr static uint8_t
+            SUBNET_PREFIX = 24;
+        constexpr static in_addr
+            SUBNET_MASK{0xffffffff << (32 - SUBNET_PREFIX) >> (32 - SUBNET_PREFIX)};
+        constexpr static uint8_t
             MAX_TTL = 0b1111;
         constexpr static uint32_t
             ID_TUN = 1u << 16u,
@@ -90,6 +94,9 @@ namespace autolabor::connection_aggregation
 
         std::string to_string() const;
 
+        // 配置已注册的 tun
+        // 仅在构造器调用
+        void config_tun() const;
         // 向 netlink 发送查询网卡请求
         void send_list_request() const;
 
@@ -102,6 +109,8 @@ namespace autolabor::connection_aggregation
             uint32_t size;
         };
         forward_t read_from_device(device_index_t, uint8_t *, size_t);
+        constexpr static auto SCAN_COUNT_OUT = 10000;
+        int _scan_counter;
 
         void send_void(in_addr, bool);
         void add_remote_inner(in_addr, in_addr, uint16_t);

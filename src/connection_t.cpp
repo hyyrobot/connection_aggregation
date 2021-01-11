@@ -29,10 +29,15 @@ namespace autolabor::connection_aggregation
         return (_state < 3 || _oppesite < 3) && _counter < 2 * COUNT_OUT;
     }
 
+    bool connection_t::died() const
+    {
+        return !_state && !_oppesite && _counter >= 2 * COUNT_OUT;
+    }
+
     size_t connection_t::sent_once()
     {
         // 如果最近还接到对方发送，退出
-        if (clock::now() - _t_r > TIMEOUT)
+        if (clock::now() - _t_r < TIMEOUT)
             return ++_sent;
         // 计数并退出，除非发了 `COUNT_OUT` 包对方都不回
         if (++_counter < COUNT_OUT)

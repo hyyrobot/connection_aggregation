@@ -91,7 +91,7 @@ namespace autolabor::connection_aggregation
         r.received_once(_union, HEADER(buffer)->type1.state);
 
         // 空包仅用于更新状态
-        if (n < sizeof(in_addr) + sizeof(aggregator_t))
+        if (n < sizeof(aggregator_t))
         {
             send_void(HEADER(buffer)->source, true);
             return {};
@@ -99,6 +99,9 @@ namespace autolabor::connection_aggregation
         // 有一个完整的聚合协议头
         // 提取路由信息
         auto origin = HEADER(buffer)->ip_src;
+        // 不在 VPN 内，忽略
+        if ((origin.s_addr & SUBNET_MASK.s_addr) != (_address.s_addr & SUBNET_MASK.s_addr))
+            return {};
         auto &o = _remotes.try_emplace(origin.s_addr).first->second;
         // 如果经过中转，更新路由表
         if (auto distance = MAX_TTL - HEADER(buffer)->type1.ttl)
@@ -134,7 +137,27 @@ namespace autolabor::connection_aggregation
         while (true)
         {
             // 阻塞
-            auto event_count = epoll_wait(_epoll, events, sizeof(events) / sizeof(epoll_event), 10);
+            auto event_count = epoll_wait(_epoll, events, sizeof(events) / sizeof(epoll_event), 20);
+
+            // 如果空闲或长时间没有清扫过
+            if (!event_count || ++_scan_counter > SCAN_COUNT_OUT)
+            {
+                _scan_counter = 0;
+                for (auto p = _remotes.begin(); p != _remotes.end();)
+                {
+                    auto next = p->second.next().s_addr;
+                    if (next && !_remotes.contains(next))
+                        p = _remotes.erase(p);
+                    else if (!p->second.scan())
+                    { // 如果直连路由断开，下次立即检查是否导致路由表失效
+                        _scan_counter = SCAN_COUNT_OUT;
+                        p = _remotes.erase(p);
+                    }
+                    else
+                        ++p;
+                }
+            }
+
             forward_t received{};
             for (auto ei = 0; ei < event_count; ++ei)
             {
