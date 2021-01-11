@@ -14,6 +14,8 @@
 
 namespace autolabor::connection_aggregation
 {
+    std::ostream &operator<<(std::ostream &, in_addr);
+
     struct host_t
     {
         host_t(const char *, in_addr);

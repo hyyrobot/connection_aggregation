@@ -25,15 +25,15 @@ uint16_t static checksum(const void *data, size_t n)
     return ~p[0];
 }
 
-std::ostream &operator<<(std::ostream &out, in_addr a)
-{
-    char text[16];
-    inet_ntop(AF_INET, &a, text, sizeof(text));
-    return out << text;
-}
-
 namespace autolabor::connection_aggregation
 {
+    std::ostream &operator<<(std::ostream &out, in_addr a)
+    {
+        char text[16];
+        inet_ntop(AF_INET, &a, text, sizeof(text));
+        return out << text;
+    }
+
     void host_t::read_tun(uint8_t *buffer, size_t size)
     {
         auto n = read(_tun, buffer, size);
@@ -110,16 +110,12 @@ namespace autolabor::connection_aggregation
             auto p = _remotes.find(dst.s_addr);
             if (p != _remotes.end())
             {
-                // 构造反馈包
-                aggregator_t msg{
-                    .type1{
-                        .type0 = SPECIAL,
-                        .ttl = static_cast<uint8_t>(MAX_TTL - p->second.distance() - 1),
-                    },
-                    .ip_src = dst,
-                };
-                // 原路返回
-                send_single(r.sending(_union), reinterpret_cast<uint8_t *>(&msg), sizeof(msg));
+                r.sent_once(_union);
+                // 构造反馈包，原路返回
+                _threads.launch([origin, dst, d = p->second.distance(), s = r.sending(_union), this] {
+                    aggregator_t msg{.type1{.type0 = SPECIAL, .ttl = static_cast<uint8_t>(MAX_TTL - d - 1)}, .ip_src = dst};
+                    send_single(s, reinterpret_cast<uint8_t *>(&msg) + sizeof(in_addr), sizeof(msg) - sizeof(in_addr));
+                });
             }
         }
         send_void(HEADER(buffer)->source, true);

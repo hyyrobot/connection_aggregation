@@ -127,7 +127,7 @@ namespace autolabor::connection_aggregation
 
         // 去重
         constexpr static auto TIMEOUT_ID = std::chrono::milliseconds(3000);
-        constexpr static auto TIMEOUT_DATA = std::chrono::milliseconds(50);
+        constexpr static auto TIMEOUT_DATA = std::chrono::milliseconds(100);
 
         std::queue<uint16_t> _id;
         std::unordered_map<uint16_t, stamp_t> _time;
