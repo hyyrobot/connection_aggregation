@@ -102,7 +102,7 @@ namespace autolabor::connection_aggregation
     remote_t::exchange(const uint8_t *data, size_t size)
     {
         const auto
-            now = std::chrono::steady_clock::now(),
+            now = clock::now(),
             id_timeout = now - TIMEOUT_ID,
             data_timeout = now - TIMEOUT_DATA;
 

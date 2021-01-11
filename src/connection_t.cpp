@@ -31,6 +31,9 @@ namespace autolabor::connection_aggregation
 
     size_t connection_t::sent_once()
     {
+        // 如果最近还接到对方发送，退出
+        if (clock::now() - _t_r > TIMEOUT)
+            return ++_sent;
         // 计数并退出，除非发了 `COUNT_OUT` 包对方都不回
         if (++_counter < COUNT_OUT)
             return ++_sent;
@@ -38,9 +41,8 @@ namespace autolabor::connection_aggregation
         auto s = _state.load();
         if (!s)
             return ++_sent;
+        // 降级
         _counter.store(0);
-        // 进行降级：3 -> 2 | {2, 1} -> 0
-        // 降级不一定要完成，不管成功失败都退出
         if (_state.compare_exchange_weak(s, s - 1))
             _oppesite.store(s - 1);
         return ++_sent;
@@ -48,9 +50,8 @@ namespace autolabor::connection_aggregation
 
     size_t connection_t::received_once(const uint8_t o)
     {
-        // 计数清零
+        _t_r = clock::now();
         _counter = 0;
-        // 记录
         _oppesite.store(o);
 
         auto s = _state.load();

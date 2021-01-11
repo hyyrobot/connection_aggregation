@@ -118,7 +118,6 @@ namespace autolabor::connection_aggregation
         std::string to_string() const;
 
     private:
-        using stamp_t = std::chrono::steady_clock::time_point;
         struct strand_t
         {
             std::unordered_map<uint16_t, in_addr> _ports;
