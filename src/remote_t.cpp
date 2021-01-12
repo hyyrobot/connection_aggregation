@@ -3,11 +3,13 @@
 #include <arpa/inet.h>
 
 #include <sstream>
-#include <iostream>
 
 namespace autolabor::connection_aggregation
 {
-    remote_t::remote_t() : _distance(-1), _union{}, _seq(0) {}
+    remote_t::remote_t()
+        : _distance(-1), _union{}, _seq(0),
+          id_timeout(DEFAULT_ID_TIMEOUT),
+          data_timeout(DEFAULT_DATA_TIMEOUT) {}
 
     remote_t::~remote_t()
     {
@@ -132,12 +134,11 @@ namespace autolabor::connection_aggregation
 
     // 换出缓存
     std::vector<std::vector<uint8_t>>
-    remote_t::exchange(const uint8_t *data, size_t size)
+    remote_t::exchange(stamp_t &now, const uint8_t *data, size_t size)
     {
         const auto
-            now = clock::now(),
-            id_timeout = now - TIMEOUT_ID,
-            data_timeout = now - TIMEOUT_DATA;
+            id_deadline = now - id_timeout,
+            data_deadline = now - data_timeout;
 
 #define ID(DATA, N) reinterpret_cast<const aggregator_t *>(DATA)->id##N // 获取数据报中的序号
         // ------------------------------------------------------------- 去重
@@ -157,7 +158,7 @@ namespace autolabor::connection_aggregation
                 _id.push(id);
             }
             // id 存在但已超时
-            else if (p->second <= id_timeout)
+            else if (p->second <= id_deadline)
             {
                 // 如果这个 id 发生超时，则比这个 id 早的必然全部超时
                 // 清扫这些以节约内存
@@ -182,7 +183,7 @@ namespace autolabor::connection_aggregation
         // it 引发变量冲突，缩小作用域消除歧义
         {
             decltype(_time.end()) it;
-            while (!_id.empty() && (it = _time.find(_id.front()))->second <= id_timeout)
+            while (!_id.empty() && (it = _time.find(_id.front()))->second <= id_deadline)
             {
                 _id.pop();
                 _time.erase(it);
@@ -194,16 +195,21 @@ namespace autolabor::connection_aggregation
         {
             // 当前包也丢弃，跳过
             if (drop_this)
+            {
+                now = stamp_t::max();
                 return {};
+            }
             // 已排序且不连续，拷贝缓存
             if (_seq && ID(data, 0) && _seq != ID(data, 0))
             {
                 std::copy(data, data + size, _buffer.emplace_back(size).data());
+                now += data_timeout;
                 return {};
             }
             // 源已排序且连续，免拷贝
             if (ID(data, 0))
                 _seq = ID(data, 1);
+            now = stamp_t::max();
             return {std::vector<uint8_t>(0)};
         }
         // 在此消费缓存数据包
@@ -231,7 +237,7 @@ namespace autolabor::connection_aggregation
         // 判断是否因超时以连续输出状态开始
         // 可能由于当前包恰好补足空缺，或头部超时
         auto it = _buffer.begin();
-        combo = (combo && _seq == ID(it->data(), 0)) || check_timeout(ID(it->data(), 1), data_timeout);
+        combo = (combo && _seq == ID(it->data(), 0)) || check_timeout(ID(it->data(), 1), data_deadline);
         // at end | combo | processed | discription
         //    v   |       |           | 不可能
         //    x   |   x   |     x     | 有效的数据包，没能补足头部，头部也没有超时
@@ -257,7 +263,7 @@ namespace autolabor::connection_aggregation
                 break;
             }
             // 判断是否仍可输出
-            combo = _seq == ID(it->data(), 0) || check_timeout(ID(it->data(), 1), data_timeout);
+            combo = _seq == ID(it->data(), 0) || check_timeout(ID(it->data(), 1), data_deadline);
         }
         // 无论何种情况，迭代器之前已全部输出
         _buffer.erase(_buffer.begin(), it);
@@ -285,6 +291,8 @@ namespace autolabor::connection_aggregation
             else
                 ++it;
         }
+        // 传出最近可能发生超时的时刻
+        now = _buffer.empty() ? stamp_t::max() : _time.at(ID(_buffer.front().data(), 1)) + data_timeout;
 #undef ID
         // at end | combo | processed | discription
         //        |   x   |     v     | 完成

@@ -40,8 +40,8 @@ namespace autolabor::connection_aggregation
     private:
         constexpr static uint8_t
             SUBNET_PREFIX = 24;
-        constexpr static in_addr
-            SUBNET_MASK{0xffffffff << (32 - SUBNET_PREFIX) >> (32 - SUBNET_PREFIX)};
+        constexpr static in_addr_t
+            SUBNET_MASK = 0xffffffff << (32 - SUBNET_PREFIX) >> (32 - SUBNET_PREFIX);
         constexpr static uint8_t
             MAX_TTL = 0b1111;
         constexpr static uint32_t

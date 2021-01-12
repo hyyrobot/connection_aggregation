@@ -98,11 +98,11 @@ namespace autolabor::connection_aggregation
         }
         // 有一个完整的聚合协议头
         // 提取路由信息
-        auto origin = HEADER(buffer)->ip_src;
-        // 不在 VPN 内，忽略
-        if ((origin.s_addr & SUBNET_MASK.s_addr) != (_address.s_addr & SUBNET_MASK.s_addr))
+        auto origin = HEADER(buffer)->ip_src.s_addr;
+        // 不在 VPN 内，或是本机，忽略
+        if ((origin & SUBNET_MASK) != (_address.s_addr & SUBNET_MASK) || origin == _address.s_addr)
             return {};
-        auto &o = _remotes.try_emplace(origin.s_addr).first->second;
+        auto &o = _remotes.try_emplace(origin).first->second;
         // 如果经过中转，更新路由表
         if (auto distance = MAX_TTL - HEADER(buffer)->type1.ttl)
             o.add_route(HEADER(buffer)->source, distance);
@@ -122,7 +122,7 @@ namespace autolabor::connection_aggregation
             }
         }
         send_void(HEADER(buffer)->source, true);
-        return {HEADER(buffer)->type1.type0 == FORWARD ? origin : in_addr{}, static_cast<uint32_t>(n)};
+        return {{HEADER(buffer)->type1.type0 == FORWARD ? origin : 0}, static_cast<uint32_t>(n)};
     }
 
     void host_t::receive(uint8_t *const buffer, const size_t size)
@@ -134,13 +134,20 @@ namespace autolabor::connection_aggregation
         send_list_request();
 
         epoll_event events[8];
+        // 最近的超时时间
+        auto min_next = stamp_t::max();
         while (true)
         {
-            // 阻塞
-            auto event_count = epoll_wait(_epoll, events, sizeof(events) / sizeof(epoll_event), 20);
-
+#define MS_OF(T) std::chrono::duration_cast<std::chrono::milliseconds>(T).count()
+            // 计算空闲时间
+            constexpr static auto FOREVER = MS_OF(std::chrono::minutes(1));
+            auto delay = MS_OF(min_next - clock::now());
+#undef MS_OF
+            // 很长的空闲退化为无超时
+            if (delay > FOREVER)
+                delay = -1;
             // 如果空闲或长时间没有清扫过
-            if (!event_count || ++_scan_counter > SCAN_COUNT_OUT)
+            if (delay > 5 || ++_scan_counter > SCAN_COUNT_OUT)
             {
                 _scan_counter = 0;
                 for (auto p = _remotes.begin(); p != _remotes.end();)
@@ -157,7 +164,9 @@ namespace autolabor::connection_aggregation
                         ++p;
                 }
             }
-
+            // 阻塞
+            auto event_count = epoll_wait(_epoll, events, sizeof(events) / sizeof(epoll_event), delay);
+            // 接收
             forward_t received{};
             for (auto ei = 0; ei < event_count; ++ei)
             {
@@ -177,11 +186,21 @@ namespace autolabor::connection_aggregation
                     break;
                 }
             }
+            // 重置超时
+            min_next = stamp_t::max();
+            const auto now = clock::now();
             for (auto &[a, r] : _remotes)
             {
+                // 刚刚从这个远端接收到数据
                 auto focus = received.origin.s_addr == a;
-                auto vectors = focus ? r.exchange(buffer, received.size)
-                                     : r.exchange(nullptr, 0);
+                // 传入 now，传出下次超时时间
+                auto next = now;
+                auto vectors = focus ? r.exchange(next, buffer, received.size)
+                                     : r.exchange(next, nullptr, 0);
+                // 如果这是最近的超时时间，更新
+                if (next < min_next)
+                    min_next = next;
+                // 处理
                 for (auto &v : vectors)
                 {
                     auto d = v.data();
@@ -191,7 +210,6 @@ namespace autolabor::connection_aggregation
                         d = buffer;
                         s = received.size;
                     }
-
 #define IP reinterpret_cast<ip *>
                     // 如果目的是本机
                     if (IP(d)->ip_dst.s_addr == _address.s_addr)
@@ -209,6 +227,7 @@ namespace autolabor::connection_aggregation
                         if (s != write(_tun, d, s))
                             THROW_ERRNO(__FILE__, __LINE__, "forward msg to tun")
                     }
+                    // 目的不是本机并且没有耗尽跳数
                     else if (--HEADER(d)->type1.ttl)
                     {
                         auto p = _remotes.find(IP(d)->ip_dst.s_addr);

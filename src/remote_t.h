@@ -93,7 +93,7 @@ namespace autolabor::connection_aggregation
 
         // 换出缓存
         std::vector<std::vector<uint8_t>>
-        exchange(const uint8_t *, size_t);
+        exchange(stamp_t &, const uint8_t *, size_t);
 
         // 通过某个连接发送计数
         size_t sent_once(connection_key_union);
@@ -112,7 +112,7 @@ namespace autolabor::connection_aggregation
         std::vector<sending_t> forward() const;
         sending_t sending(connection_key_union) const;
 
-        // 显示格斯
+        // 显示格式
         constexpr static auto
             TITLE = "|      host       | index |  port  |     address     | state | input | output | counter |",
             _____ = "| --------------- | ----- | ------ | --------------- | ----- | ----- | ------ | ------- |",
@@ -120,16 +120,17 @@ namespace autolabor::connection_aggregation
 
         std::string to_string() const;
 
+        // 去重、排队超时
+        constexpr static auto DEFAULT_ID_TIMEOUT = std::chrono::seconds(3);
+        constexpr static auto DEFAULT_DATA_TIMEOUT = std::chrono::milliseconds(100);
+        std::chrono::microseconds id_timeout, data_timeout;
+
     private:
         struct strand_t
         {
             std::unordered_map<uint16_t, in_addr> _ports;
             std::unordered_map<connection_key_t, connection_t> _connections;
         };
-
-        // 去重
-        constexpr static auto TIMEOUT_ID = std::chrono::milliseconds(3000);
-        constexpr static auto TIMEOUT_DATA = std::chrono::milliseconds(100);
 
         std::queue<uint16_t> _id;
         std::unordered_map<uint16_t, stamp_t> _time;
